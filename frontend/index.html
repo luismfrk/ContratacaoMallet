@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Contratações Públicas</title>
+    <link rel="stylesheet" href="/static/styles.css?v=5" />
+  </head>
+  <body>
+    <div id="auth-overlay" class="modal-overlay">
+      <section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+        <div class="auth-brand">
+          <img src="/static/brasao-mallet.png" alt="Brasão do Município de Mallet" />
+          <div>
+            <strong>Prefeitura Municipal de Mallet</strong>
+            <span>Sistema de Contratações Públicas</span>
+          </div>
+        </div>
+        <div class="auth-tabs hidden" role="tablist" aria-label="Opções de acesso">
+          <button id="login-tab" class="active" type="button" role="tab" aria-selected="true">
+            Entrar
+          </button>
+          <button id="register-tab" class="hidden" type="button" role="tab" aria-selected="false">
+            Criar conta
+          </button>
+        </div>
+        <div class="auth-symbol" aria-hidden="true"><span class="ion-icon icon-lock"></span></div>
+        <p class="eyebrow">Área restrita</p>
+        <h2 id="auth-title">Entrar no sistema</h2>
+        <p id="auth-description">Informe suas credenciais para continuar.</p>
+        <form id="auth-form">
+          <label id="auth-name-field" class="hidden">Nome completo <span>*</span>
+            <input id="auth-name" autocomplete="name" />
+          </label>
+          <label>Usuário <span>*</span>
+            <input id="auth-login" autocomplete="username" required />
+          </label>
+          <label>Senha <span>*</span>
+            <input id="auth-password" type="password" autocomplete="current-password" required />
+          </label>
+          <label id="auth-confirm-field" class="hidden">Confirmar senha <span>*</span>
+            <input id="auth-confirm-password" type="password" autocomplete="new-password" />
+          </label>
+          <p id="auth-password-help" class="field-help hidden">
+            Use pelo menos 10 caracteres, com maiúscula, minúscula e número.
+          </p>
+          <div id="auth-status" class="status" role="status" aria-live="polite"></div>
+          <button id="auth-submit" type="submit">Entrar</button>
+        </form>
+      </section>
+    </div>
+
+    <div id="users-overlay" class="modal-overlay hidden">
+      <section class="auth-card users-card" role="dialog" aria-modal="true" aria-labelledby="users-title">
+        <button id="close-users" class="modal-close" type="button" aria-label="Fechar">×</button>
+        <p class="eyebrow">Administração</p>
+        <h2 id="users-title">Usuários do sistema</h2>
+        <div id="users-list" class="users-list"></div>
+        <form id="user-form">
+          <input id="edit-user-id" type="hidden" />
+          <div class="grid two">
+            <label>Nome completo <span>*</span><input id="new-user-name" required /></label>
+            <label>Usuário <span>*</span><input id="new-user-login" required /></label>
+            <label>Senha inicial <span>*</span><input id="new-user-password" type="password" required /></label>
+            <label>Perfil <span>*</span>
+              <select id="new-user-role">
+                <option value="editor">Editor</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </label>
+            <label>Secretaria de acesso <span>*</span>
+              <select id="new-user-secretariat">
+                <option value="">Selecione...</option>
+                <option>Administração</option><option>Agropecuária e Abastecimento</option>
+                <option>Cultura e Turismo</option><option>Educação</option><option>Esportes</option>
+                <option>Família e Desenvolvimento Social</option><option>Fazenda</option>
+                <option>Indústria e Comércio</option><option>Meio Ambiente e Recursos Hídricos</option>
+                <option>Obras e Serviços Públicos</option><option>Planejamento</option>
+                <option>Relações Institucionais e Governamentais</option><option>Saúde</option>
+                <option>UCI - Unidade de Controle Interno</option>
+              </select>
+            </label>
+            <label class="edit-only hidden">Situação
+              <select id="edit-user-active"><option value="1">Ativo</option><option value="0">Inativo</option></select>
+            </label>
+            <label class="edit-only hidden">Nova senha (opcional)
+              <input id="edit-user-password" type="password" placeholder="Deixe vazio para manter a atual" />
+            </label>
+          </div>
+          <div id="user-status" class="status" role="status" aria-live="polite"></div>
+          <div class="user-form-actions">
+            <button id="save-user-button" type="submit"><span class="ion-icon icon-add" aria-hidden="true"></span>Cadastrar usuário</button>
+            <button id="cancel-user-edit" class="secondary-button hidden" type="button">Cancelar edição</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <header class="topbar">
+      <div class="shell topbar-content">
+        <div class="brand-mark">
+          <img src="/static/brasao-mallet.png" alt="Brasão do Município de Mallet" />
+        </div>
+        <div class="brand-copy">
+          <h1>Sistema de Contratações Públicas</h1>
+        </div>
+        <div class="header-actions">
+          <div class="system-chip">
+            <span class="ion-icon icon-desktop" aria-hidden="true"></span>
+            Sistema online
+          </div>
+          <button id="manage-users" class="header-button hidden" type="button">
+            <span class="ion-icon icon-people" aria-hidden="true"></span>Usuários
+          </button>
+          <div id="user-chip" class="user-chip hidden">
+            <span class="ion-icon icon-person" aria-hidden="true"></span>
+            <span id="current-user-name"></span>
+          </div>
+          <button id="logout-button" class="header-button hidden" type="button">
+            <span class="ion-icon icon-logout" aria-hidden="true"></span>Sair
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="shell layout">
+      <section class="workspace-panel">
+        <div class="workspace-heading">
+          <div class="workspace-icon" aria-hidden="true">
+            <span class="ion-icon icon-home"></span>
+          </div>
+          <div>
+            <p class="eyebrow">Área de trabalho</p>
+            <h2>Secretaria e contratação</h2>
+            <p>Selecione a secretaria responsável e acesse seus processos.</p>
+          </div>
+        </div>
+        <div class="contract-selector">
+          <label for="current-secretariat">Secretaria selecionada</label>
+          <select id="current-secretariat">
+            <option value="">Selecione uma secretaria</option>
+            <option>Administração</option>
+            <option>Agropecuária e Abastecimento</option>
+            <option>Cultura e Turismo</option>
+            <option>Educação</option>
+            <option>Esportes</option>
+            <option>Família e Desenvolvimento Social</option>
+            <option>Fazenda</option>
+            <option>Indústria e Comércio</option>
+            <option>Meio Ambiente e Recursos Hídricos</option>
+            <option>Obras e Serviços Públicos</option>
+            <option>Planejamento</option>
+            <option>Relações Institucionais e Governamentais</option>
+            <option>Saúde</option>
+            <option>UCI - Unidade de Controle Interno</option>
+          </select>
+        </div>
+        <div class="new-contract-area">
+          <p class="panel-label">Nova contratação</p>
+          <div class="new-contract">
+            <input id="new-contract-title" aria-label="Título da nova contratação" placeholder="Ex.: Aquisição de materiais escolares" />
+            <input id="new-contract-object" aria-label="Objeto resumido" placeholder="Objeto resumido (opcional)" />
+            <button id="create-contract" type="button">
+              <span class="ion-icon icon-add" aria-hidden="true"></span>Criar
+            </button>
+          </div>
+        </div>
+        <div class="history-area">
+          <label class="panel-label" for="current-contract">Processo selecionado</label>
+          <select id="current-contract">
+            <option value="">Selecione ou crie uma contratação</option>
+          </select>
+          <div id="document-history" class="document-history hidden"></div>
+        </div>
+        <div id="workspace-status" class="status" role="status" aria-live="polite"></div>
+      </section>
+      <aside class="steps" aria-label="Etapas do documento">
+        <p class="nav-title">Documentos</p>
+        <button id="show-dfd" class="step" type="button">
+          <b><span class="ion-icon icon-document" aria-hidden="true"></span></b>
+          <span><strong>DFD</strong><small>Formalização da demanda</small></span>
+        </button>
+        <button id="show-etp" class="step" type="button">
+          <b><span class="ion-icon icon-analytics" aria-hidden="true"></span></b>
+          <span><strong>ETP</strong><small>Estudo técnico preliminar</small></span>
+        </button>
+        <button id="show-tr" class="step" type="button">
+          <b><span class="ion-icon icon-clipboard" aria-hidden="true"></span></b>
+          <span><strong>TR</strong><small>Termo de referência</small></span>
+        </button>
+        <button id="show-requisicao" class="step" type="button">
+          <b><span class="ion-icon icon-document" aria-hidden="true"></span></b>
+          <span><strong>Requisição</strong><small>Gerar a partir do orçamento</small></span>
+        </button>
+      </aside>
+
+      <section id="dfd-module" class="card hidden">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Documento de Formalização de Demanda</p>
+            <h2>Novo DFD</h2>
+          </div>
+          <span class="badge">Portaria nº 033/2026</span>
+        </div>
+
+        <form id="dfd-form">
+          <fieldset>
+            <legend>Enquadramento</legend>
+            <div class="grid two">
+              <label>Tipo de DFD <span>*</span>
+                <select id="tipo" name="tipo" required>
+                  <option value="">Carregando tipos...</option>
+                </select>
+              </label>
+              <label>Unidade requisitante <span>*</span>
+                <input name="unidade_requisitante" required value="Secretaria Municipal de Educação" />
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Necessidade</legend>
+            <label>Objeto <span>*</span>
+              <textarea name="objeto" rows="3" required placeholder="Descreva de forma objetiva o que será contratado"></textarea>
+            </label>
+            <label>Justificativa da necessidade <span>*</span>
+              <textarea name="justificativa" rows="5" required placeholder="Explique o problema, a finalidade e o resultado esperado para o interesse público"></textarea>
+              <small>Informe a necessidade; não descreva apenas a solução desejada.</small>
+            </label>
+            <div class="grid three">
+              <label>Quantitativo <span>*</span>
+                <input name="quantitativo" type="number" min="0.01" step="0.01" required />
+              </label>
+              <label>Unidade de medida <span>*</span>
+                <input name="unidade_medida" required placeholder="unidades, meses, horas..." />
+              </label>
+              <label>Valor estimado (R$) <span>*</span>
+                <input name="valor_estimado" type="number" min="0.01" step="0.01" required />
+              </label>
+            </div>
+            <label>Fonte da estimativa <span>*</span>
+              <input name="fonte_estimativa" required placeholder="Pesquisa de mercado, PNCP, histórico de preços..." />
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Planejamento e responsabilidade</legend>
+            <div class="grid two">
+              <label>Vigência em meses <span>*</span>
+                <input name="prazo_vigencia_meses" type="number" min="1" step="1" required />
+              </label>
+              <label>Data pretendida <span>*</span>
+                <input name="data_pretendida" type="date" required />
+              </label>
+              <label>Nome do responsável <span>*</span>
+                <input name="responsavel_nome" required />
+              </label>
+              <label>Cargo <span>*</span>
+                <input name="responsavel_cargo" required />
+              </label>
+              <label>Matrícula <span>*</span>
+                <input name="responsavel_matricula" required />
+              </label>
+              <label>Código PNCP
+                <input name="codigo_pncp" placeholder="Se disponível" />
+              </label>
+            </div>
+            <label>Fundamento <span>*</span>
+              <textarea name="fundamento" rows="3" required placeholder="Informe o fundamento aplicável à contratação"></textarea>
+            </label>
+            <div class="grid two">
+              <label>Autoridade signatária <span>*</span>
+                <input name="autoridade_nome" required placeholder="Nome que constará na assinatura" />
+              </label>
+              <label>Cargo da autoridade <span>*</span>
+                <input name="autoridade_cargo" required value="Secretário(a) Municipal de Educação" />
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset id="contratada-fields" class="hidden">
+            <legend>Contratada</legend>
+            <div class="grid two">
+              <label>Nome ou razão social <span>*</span>
+                <input name="contratada_nome" />
+              </label>
+              <label>CNPJ ou CPF <span>*</span>
+                <input name="contratada_documento" />
+              </label>
+            </div>
+          </fieldset>
+
+          <div id="status" class="status" role="status" aria-live="polite"></div>
+          <div class="form-actions">
+            <button id="submit-button" type="submit"><span class="ion-icon icon-create" aria-hidden="true"></span>Gerar prévia do DFD</button>
+            <button id="save-dfd" class="secondary-button" type="button"><span class="ion-icon icon-save" aria-hidden="true"></span>Salvar rascunho</button>
+          </div>
+        </form>
+
+        <section id="preview-section" class="preview hidden">
+          <div class="section-heading">
+            <h2>Prévia do documento</h2>
+            <span id="preview-mode" class="badge"></span>
+          </div>
+          <pre id="resultado"></pre>
+          <button id="download-button" class="download-button" type="button">
+            <span class="ion-icon icon-download" aria-hidden="true"></span>Baixar arquivo Word
+          </button>
+        </section>
+      </section>
+
+      <section id="etp-module" class="card hidden">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Estudo Técnico Preliminar</p>
+            <h2>ETP de compras e serviços</h2>
+          </div>
+          <span class="badge">Anexo V</span>
+        </div>
+        <div class="document-switch">
+          <button id="show-etp-compras" class="active" type="button">Compras e serviços</button>
+          <button id="show-etp-obras" type="button">Obras e engenharia</button>
+        </div>
+
+        <form id="etp-form">
+          <fieldset>
+            <legend>Informações básicas e necessidade</legend>
+            <label>Objeto <span>*</span>
+              <textarea name="objeto" rows="3" required></textarea>
+            </label>
+            <div class="grid two">
+              <label>Solicitante <span>*</span>
+                <input name="solicitante" required value="Secretaria Municipal de Educação" />
+              </label>
+              <label>Responsável pela elaboração <span>*</span>
+                <input name="responsavel_nome" required />
+              </label>
+            </div>
+            <label>Justificativa da necessidade <span>*</span>
+              <textarea name="justificativa" rows="5" required placeholder="Descreva o problema sob a perspectiva do interesse público"></textarea>
+            </label>
+            <label>Resultados pretendidos <span>*</span>
+              <textarea name="resultados_pretendidos" rows="4" required placeholder="Economicidade e melhor aproveitamento dos recursos"></textarea>
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Análise da solução</legend>
+            <label>Alternativas identificadas <span>*</span>
+              <textarea name="alternativas" rows="5" required placeholder="Liste e compare as soluções encontradas no mercado"></textarea>
+            </label>
+            <label>Solução considerada viável <span>*</span>
+              <textarea name="solucao_escolhida" rows="4" required></textarea>
+            </label>
+            <label>Requisitos da contratação <span>*</span>
+              <textarea name="requisitos" rows="5" required placeholder="Requisitos técnicos, funcionais, de desempenho e prazos"></textarea>
+            </label>
+            <label>Prazo do contrato em meses <span>*</span>
+              <input name="prazo_meses" type="number" min="1" step="1" required />
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Quantidades</legend>
+            <div id="etp-items" class="items"></div>
+            <button id="add-etp-item" class="secondary-button" type="button">Adicionar item</button>
+            <label>Memória de cálculo <span>*</span>
+              <textarea name="memoria_calculo" rows="4" required placeholder="Explique como as quantidades foram calculadas"></textarea>
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Pesquisa e estimativa</legend>
+            <label>Fontes da pesquisa de preços <span>*</span>
+              <textarea name="fontes_pesquisa" rows="3" required></textarea>
+            </label>
+            <label>Metodologia adotada <span>*</span>
+              <textarea name="metodologia_pesquisa" rows="3" required placeholder="Média, mediana, menor valor e justificativa"></textarea>
+            </label>
+            <label>Justificativa da escolha da solução <span>*</span>
+              <textarea name="justificativa_solucao" rows="4" required></textarea>
+            </label>
+            <label>Valor total estimado (R$) <span>*</span>
+              <input name="valor_estimado" type="number" min="0.01" step="0.01" required />
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Planejamento e viabilidade</legend>
+            <label>Previsão no PPA e no PCA <span>*</span>
+              <textarea name="previsao_planos" rows="3" required></textarea>
+            </label>
+            <label>Parcelamento ou não da contratação <span>*</span>
+              <textarea name="parcelamento" rows="4" required></textarea>
+            </label>
+            <label>Contratações correlatas ou interdependentes <span>*</span>
+              <textarea name="contratacoes_correlatas" rows="3" required></textarea>
+            </label>
+            <label>Capacitação para gestão e fiscalização <span>*</span>
+              <textarea name="capacitacao" rows="3" required></textarea>
+            </label>
+            <label>Impactos ambientais e medidas de mitigação <span>*</span>
+              <textarea name="impactos_ambientais" rows="3" required></textarea>
+            </label>
+            <label>Declaração de viabilidade <span>*</span>
+              <textarea name="declaracao_viabilidade" rows="3" required></textarea>
+            </label>
+            <div class="grid two">
+              <label>Autoridade signatária <span>*</span>
+                <input name="autoridade_nome" required />
+              </label>
+              <label>Cargo da autoridade <span>*</span>
+                <input name="autoridade_cargo" required value="Secretário(a) Municipal de Educação" />
+              </label>
+            </div>
+          </fieldset>
+
+          <div id="etp-status" class="status" role="status" aria-live="polite"></div>
+          <div class="form-actions">
+            <button id="etp-submit" type="submit"><span class="ion-icon icon-create" aria-hidden="true"></span>Gerar prévia do ETP</button>
+            <button id="save-etp" class="secondary-button" type="button"><span class="ion-icon icon-save" aria-hidden="true"></span>Salvar rascunho</button>
+          </div>
+        </form>
+
+        <section id="etp-preview" class="preview hidden">
+          <div class="section-heading">
+            <h2>Prévia do ETP</h2>
+            <span class="badge">modelo oficial estruturado</span>
+          </div>
+          <pre id="etp-result"></pre>
+          <button id="etp-download" class="download-button" type="button">
+            <span class="ion-icon icon-download" aria-hidden="true"></span>Baixar ETP em Word
+          </button>
+        </section>
+
+        <form id="etp-obras-form" class="hidden">
+          <fieldset>
+            <legend>Informações básicas</legend>
+            <label>Objeto da obra ou serviço <span>*</span>
+              <textarea name="objeto" rows="3" required></textarea>
+            </label>
+            <div class="grid two">
+              <label>Solicitante <span>*</span>
+                <input name="solicitante" required value="Secretaria Municipal de Educação" />
+              </label>
+              <label>Responsável pela elaboração <span>*</span>
+                <input name="responsavel_nome" required />
+              </label>
+            </div>
+            <label>Justificativa da necessidade <span>*</span>
+              <textarea name="justificativa" rows="4" required></textarea>
+            </label>
+            <label>Resultados pretendidos <span>*</span>
+              <textarea name="resultados_pretendidos" rows="4" required></textarea>
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>Solução de engenharia</legend>
+            <label>Alternativas técnicas analisadas <span>*</span>
+              <textarea name="alternativas" rows="5" required></textarea>
+            </label>
+            <label>Solução considerada viável <span>*</span>
+              <textarea name="solucao_escolhida" rows="4" required></textarea>
+            </label>
+            <label>Local de execução <span>*</span>
+              <textarea name="local_execucao" rows="2" required></textarea>
+            </label>
+            <label>Serviços e materiais previstos <span>*</span>
+              <textarea name="servicos_materiais" rows="4" required></textarea>
+            </label>
+            <label>Metodologia executiva <span>*</span>
+              <textarea name="metodologia_executiva" rows="4" required></textarea>
+            </label>
+            <label>Cronograma físico-financeiro <span>*</span>
+              <textarea name="cronograma" rows="3" required></textarea>
+            </label>
+            <label>Estimativa de quantidades e memória de cálculo <span>*</span>
+              <textarea name="estimativa_quantidades" rows="4" required></textarea>
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>Mercado, custos e local</legend>
+            <label>Fontes da pesquisa de preços <span>*</span>
+              <textarea name="fontes_pesquisa" rows="3" required></textarea>
+            </label>
+            <label>Metodologia da pesquisa <span>*</span>
+              <textarea name="metodologia_pesquisa" rows="3" required></textarea>
+            </label>
+            <label>Justificativa da escolha da solução <span>*</span>
+              <textarea name="justificativa_solucao" rows="4" required></textarea>
+            </label>
+            <label>Custos operacionais futuros <span>*</span>
+              <textarea name="custos_operacionais" rows="4" required></textarea>
+            </label>
+            <label>Levantamento de interferências <span>*</span>
+              <textarea name="interferencias" rows="4" required placeholder="Lotes, árvores, redes de água, energia e outras interferências"></textarea>
+            </label>
+            <label>Titularidade ou posse da área <span>*</span>
+              <textarea name="titularidade_area" rows="3" required></textarea>
+            </label>
+            <label>Valor estimado (R$) <span>*</span>
+              <input name="valor_estimado" type="number" min="0.01" step="0.01" required />
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>Planejamento e viabilidade</legend>
+            <label>Previsão no PPA e PCA <span>*</span>
+              <textarea name="previsao_planos" rows="3" required></textarea>
+            </label>
+            <label>Parcelamento ou não <span>*</span>
+              <textarea name="parcelamento" rows="4" required></textarea>
+            </label>
+            <label>Contratações correlatas ou interdependentes <span>*</span>
+              <textarea name="contratacoes_correlatas" rows="3" required></textarea>
+            </label>
+            <label>Capacitação dos fiscais <span>*</span>
+              <textarea name="capacitacao" rows="3" required></textarea>
+            </label>
+            <label>Impactos ambientais <span>*</span>
+              <textarea name="impactos_ambientais" rows="3" required></textarea>
+            </label>
+            <label>Declaração de viabilidade <span>*</span>
+              <textarea name="declaracao_viabilidade" rows="3" required></textarea>
+            </label>
+            <label>Anexos <span>*</span>
+              <textarea name="anexos" rows="3" required placeholder="Projetos, plantas, memoriais, levantamentos..."></textarea>
+            </label>
+            <div class="grid two">
+              <label>Autoridade signatária <span>*</span>
+                <input name="autoridade_nome" required />
+              </label>
+              <label>Cargo da autoridade <span>*</span>
+                <input name="autoridade_cargo" required value="Secretário(a) Municipal de Educação" />
+              </label>
+            </div>
+          </fieldset>
+          <div id="etp-obras-status" class="status" role="status" aria-live="polite"></div>
+          <div class="form-actions">
+            <button id="etp-obras-submit" type="submit"><span class="ion-icon icon-create" aria-hidden="true"></span>Gerar prévia do ETP de obras</button>
+            <button id="save-etp-obras" class="secondary-button" type="button"><span class="ion-icon icon-save" aria-hidden="true"></span>Salvar rascunho</button>
+          </div>
+        </form>
+
+        <section id="etp-obras-preview" class="preview hidden">
+          <div class="section-heading">
+            <h2>Prévia do ETP de obras</h2>
+            <span class="badge">Anexo VI</span>
+          </div>
+          <pre id="etp-obras-result"></pre>
+          <button id="etp-obras-download" class="download-button" type="button">
+            <span class="ion-icon icon-download" aria-hidden="true"></span>Baixar ETP de obras em Word
+          </button>
+        </section>
+      </section>
+
+      <section id="tr-module" class="card hidden">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Termo de Referência</p>
+            <h2>Novo TR</h2>
+          </div>
+          <span class="badge">7 modelos oficiais</span>
+        </div>
+        <form id="tr-form">
+          <fieldset>
+            <legend>Enquadramento e objeto</legend>
+            <div class="grid two">
+              <label>Tipo de TR <span>*</span>
+                <select id="tr-tipo" name="tipo" required>
+                  <option value="">Carregando tipos...</option>
+                </select>
+              </label>
+              <label>Secretaria <span>*</span>
+                <input name="secretaria" required value="Secretaria Municipal de Educação" />
+              </label>
+            </div>
+            <label>Objeto <span>*</span>
+              <textarea name="objeto" rows="4" required></textarea>
+            </label>
+            <label>Fundamentação e justificativa <span>*</span>
+              <textarea name="fundamentacao" rows="5" required></textarea>
+            </label>
+          </fieldset>
+
+          <fieldset id="tr-fornecedor" class="hidden">
+            <legend>Fornecedor escolhido</legend>
+            <div class="grid two">
+              <label>Nome ou razão social <span>*</span>
+                <input name="fornecedor_nome" />
+              </label>
+              <label>CNPJ ou CPF <span>*</span>
+                <input name="fornecedor_documento" />
+              </label>
+            </div>
+            <label>Razões para a escolha <span>*</span>
+              <textarea name="razoes_escolha" rows="4"></textarea>
+            </label>
+          </fieldset>
+
+          <fieldset id="tr-items-fieldset">
+            <legend>Itens da contratação</legend>
+            <div id="tr-items" class="items"></div>
+            <button id="add-tr-item" class="secondary-button" type="button">Adicionar item</button>
+          </fieldset>
+
+          <fieldset>
+            <legend>Condições da contratação</legend>
+            <label>Metodologia de cálculo dos valores <span>*</span>
+              <textarea name="metodologia_calculo" rows="3" required></textarea>
+            </label>
+            <div class="grid two">
+              <label>Vigência em meses <span>*</span>
+                <input name="vigencia_meses" type="number" min="1" step="1" required />
+              </label>
+              <label>Forma e critério de seleção <span>*</span>
+                <input name="criterio_selecao" required />
+              </label>
+            </div>
+            <label>Requisitos da contratação <span>*</span>
+              <textarea name="requisitos" rows="5" required></textarea>
+            </label>
+            <label>Obrigações da contratada <span>*</span>
+              <textarea name="obrigacoes" rows="5" required></textarea>
+            </label>
+            <label>Recebimento provisório e definitivo <span>*</span>
+              <textarea name="recebimento" rows="4" required></textarea>
+            </label>
+            <label>Condições de pagamento <span>*</span>
+              <textarea name="pagamento" rows="4" required></textarea>
+            </label>
+            <label>Critério de reajuste <span>*</span>
+              <textarea name="reajuste" rows="3" required></textarea>
+            </label>
+            <label>Subcontratação <span>*</span>
+              <textarea name="subcontratacao" rows="3" required></textarea>
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>Fiscalização, orçamento e assinaturas</legend>
+            <div class="grid two">
+              <label>Fiscal do contrato <span>*</span>
+                <input name="fiscal_nome" required />
+              </label>
+              <label>Portaria do fiscal <span>*</span>
+                <input name="fiscal_portaria" required />
+              </label>
+            </div>
+            <label>Previsão orçamentária <span>*</span>
+              <textarea name="previsao_orcamentaria" rows="3" required></textarea>
+            </label>
+            <label>Dotações orçamentárias <span>*</span>
+              <textarea name="dotacoes" rows="3" required></textarea>
+            </label>
+            <label>Anexos <span>*</span>
+              <textarea name="anexos" rows="3" required></textarea>
+            </label>
+            <div class="grid two">
+              <label>Responsável pela elaboração <span>*</span>
+                <input name="responsavel_nome" required />
+              </label>
+              <label>Autoridade signatária <span>*</span>
+                <input name="autoridade_nome" required />
+              </label>
+              <label>Cargo da autoridade <span>*</span>
+                <input name="autoridade_cargo" required value="Secretário(a) Municipal de Educação" />
+              </label>
+            </div>
+          </fieldset>
+          <div id="tr-status" class="status" role="status" aria-live="polite"></div>
+          <div class="form-actions">
+            <button id="tr-submit" type="submit"><span class="ion-icon icon-create" aria-hidden="true"></span>Gerar prévia do TR</button>
+            <button id="save-tr" class="secondary-button" type="button"><span class="ion-icon icon-save" aria-hidden="true"></span>Salvar rascunho</button>
+          </div>
+        </form>
+        <section id="tr-preview" class="preview hidden">
+          <div class="section-heading">
+            <h2>Prévia do TR</h2>
+            <span class="badge">modelo oficial estruturado</span>
+          </div>
+          <pre id="tr-result"></pre>
+          <button id="tr-download" class="download-button" type="button">
+            <span class="ion-icon icon-download" aria-hidden="true"></span>Baixar TR em Word
+          </button>
+        </section>
+      </section>
+      <section id="requisicao-module" class="card hidden">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Requisição interna</p>
+            <h2>Gerar requisição pelo orçamento</h2>
+          </div>
+          <span class="badge">Excel</span>
+        </div>
+        <form id="requisicao-form">
+          <fieldset>
+            <legend>1. Importar orçamento</legend>
+            <div class="grid two">
+              <label>Tipo da requisição <span>*</span>
+                <select id="requisicao-tipo" required>
+                  <option value="material">Material / peças</option>
+                  <option value="servico">Serviços</option>
+                </select>
+              </label>
+              <label>Orçamento (PDF ou .xlsx) <span>*</span>
+                <input id="requisicao-arquivo" type="file" accept=".pdf,.xlsx,application/pdf" required />
+              </label>
+            </div>
+            <button id="requisicao-importar" class="secondary-button" type="button">Ler orçamento</button>
+          </fieldset>
+          <fieldset>
+            <legend>2. Dados da requisição</legend>
+            <div class="grid two">
+              <label>Fornecedor <span>*</span><input id="requisicao-fornecedor" required /></label>
+              <label>Cidade <span>*</span><input id="requisicao-cidade" value="MALLET" required /></label>
+              <label class="full-width">Endereço <span>*</span><input id="requisicao-endereco" required /></label>
+              <label>Destino <span>*</span><input id="requisicao-destino" required /></label>
+              <label>Fonte/Recurso <span>*</span><input id="requisicao-fonte" required /></label>
+              <label>Identificação (placa e ordem) <span>*</span><input id="requisicao-identificacao" placeholder="PLACA- ABC-1D23  ORDEM- 123/2026" required /></label>
+              <label>Desconto geral (%) <input id="requisicao-desconto" type="number" min="0" max="100" step="0.01" value="0" /></label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>3. Itens encontrados</legend>
+            <div id="requisicao-resumo" class="import-summary">Importe um orçamento para visualizar os itens.</div>
+            <div id="requisicao-itens"></div>
+          </fieldset>
+          <div id="requisicao-status" class="status" role="status" aria-live="polite"></div>
+          <button id="requisicao-download" type="submit" disabled>Gerar e baixar requisição em Excel</button>
+        </form>
+        <section class="monthly-report">
+          <div>
+            <h3>Relatório mensal por veículo</h3>
+            <p>Consolida os valores de peças e serviços das requisições emitidas.</p>
+          </div>
+          <div class="report-controls">
+            <label>Mês<input id="relatorio-mes" type="month" /></label>
+            <button id="relatorio-download" type="button">Baixar relatório em Excel</button>
+          </div>
+          <div id="relatorio-status" class="status"></div>
+        </section>
+      </section>
+    </main>
+    <script src="/static/app.js?v=10"></script>
+  </body>
+</html>
