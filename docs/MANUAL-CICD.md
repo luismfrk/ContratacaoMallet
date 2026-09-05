@@ -26,7 +26,7 @@ Job image: Docker build
 GHCR: latest + sha-<commit>
      │
      ▼
-Job deploy: Deploy Hook secreto
+Job deploy: Render CLI + secrets
      │
      ▼
 Render ──► container ──► GET /health
@@ -115,16 +115,17 @@ O Render executará a imagem publicada no GHCR. Configuração inicial:
 4. use `ghcr.io/luismfrk/contratacaomallet:latest`;
 5. configure o health check como `/health`;
 6. configure as variáveis descritas abaixo;
-7. faça o primeiro deploy;
-8. copie o **Deploy Hook** do serviço.
+7. faça o primeiro deploy.
 
-No GitHub, acesse **Settings → Secrets and variables → Actions → New repository secret** e crie:
+O serviço desta atividade foi criado com os seguintes dados:
 
 ```text
-RENDER_DEPLOY_HOOK_URL=https://api.render.com/deploy/...
+Nome: contratacao-mallet
+ID: srv-dae6khn40ujc73e1fls0
+URL: https://contratacao-mallet.onrender.com
 ```
 
-O job `deploy` verifica se o valor existe e envia um POST com `curl --fail`. A URL nunca fica exposta no repositório. Recomenda-se criar o environment `production` em **Settings → Environments**, restringi-lo à `main` e, se necessário, exigir aprovação.
+No GitHub, em **Settings → Secrets and variables → Actions**, foram definidos `RENDER_API_KEY`, `RENDER_SERVICE_ID` e `RENDER_WORKSPACE_ID`. O token fica criptografado e nunca aparece no YAML. O job instala uma versão fixa do Render CLI, seleciona o workspace e atualiza o serviço para a imagem `latest`, aguardando o resultado do deploy. Recomenda-se criar o environment `production`, restringi-lo à `main` e, se necessário, exigir aprovação.
 
 ## 7. Variáveis de produção
 
@@ -149,7 +150,7 @@ Para produção, use MySQL gerenciado. O SQLite padrão fica dentro do container
 3. dependências são instaladas e a suíte é executada;
 4. se tudo passar, o Dockerfile gera a imagem;
 5. o Actions autentica com token efêmero e envia `latest` e `sha-*` ao GHCR;
-6. o job de produção lê o deploy hook dos secrets;
+6. o job de produção autentica o Render CLI com os secrets;
 7. o Render baixa `latest`, inicia Uvicorn e valida `/health`;
 8. a nova instância passa a receber tráfego.
 
@@ -197,5 +198,18 @@ Se a versão nova apresentar problema, altere temporariamente no Render a refer�
 - [x] deploy automático preparado para Render;
 - [x] diagrama do fluxo e dificuldades;
 - [ ] enviar os novos arquivos ao GitHub;
-- [ ] configurar GHCR/Render e registrar a URL pública;
-- [ ] anexar evidência da primeira execução verde.
+- [x] GHCR público e serviço Render configurados;
+- [x] URL pública e health check validados;
+- [ ] confirmar a primeira execução totalmente verde após cadastrar os secrets.
+
+## 13. Evidências da execução
+
+- Repositório: <https://github.com/luismfrk/ContratacaoMallet>
+- Commit inicial da integração: `1ec769f3bb9a003e84615d378cc60e1d6c57ef3e`
+- Execução: <https://github.com/luismfrk/ContratacaoMallet/actions/runs/33985941887>
+- Testes Python: aprovados em 17 segundos;
+- build e publicação da imagem: aprovados em 42 segundos;
+- imagem: `ghcr.io/luismfrk/contratacaomallet:latest`;
+- digest publicado: `sha256:940993a2c135927ef19fb2cad2cc4cb8ef24056d85639e920bfe4222e005a3d5`;
+- serviço: <https://contratacao-mallet.onrender.com>;
+- health check validado com HTTP 200 e corpo `{"status":"ok"}`.

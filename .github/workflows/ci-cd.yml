@@ -89,9 +89,27 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Acionar Deploy Hook
-        env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      - name: Instalar Render CLI
         run: |
-          test -n "$RENDER_DEPLOY_HOOK_URL"
-          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
+          curl --fail --location --silent --show-error \
+            https://github.com/render-oss/cli/releases/download/v2.26.0/cli_2.26.0_linux_amd64.zip \
+            --output render.zip
+          unzip -q render.zip
+          sudo install -m 0755 render /usr/local/bin/render 2>/dev/null || \
+            sudo install -m 0755 cli_v2.26.0 /usr/local/bin/render
+
+      - name: Publicar a nova imagem no serviço
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_WORKSPACE_ID: ${{ secrets.RENDER_WORKSPACE_ID }}
+          RENDER_CLI_DISABLE_ANALYTICS: "1"
+          CI: "true"
+        run: |
+          test -n "$RENDER_API_KEY"
+          test -n "$RENDER_SERVICE_ID"
+          test -n "$RENDER_WORKSPACE_ID"
+          render workspace set "$RENDER_WORKSPACE_ID" --confirm
+          render deploys create "$RENDER_SERVICE_ID" \
+            --image ghcr.io/luismfrk/contratacaomallet:latest \
+            --wait --output json --confirm

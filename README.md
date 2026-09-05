@@ -27,4 +27,4 @@ docker build -t contratacao-mallet .
 docker run --rm -p 8000:8000 --env-file .env contratacao-mallet
 ```
 
-O pipeline em `.github/workflows/ci-cd.yml` testa a aplicação, publica `ghcr.io/luismfrk/contratacaomallet` e aciona o deploy no Render. Consulte `docs/MANUAL-CICD.md`.
+O pipeline em `.github/workflows/ci-cd.yml` testa a aplicação, publica `ghcr.io/luismfrk/contratacaomallet` e atualiza automaticamente o serviço em <https://contratacao-mallet.onrender.com>. Consulte `docs/MANUAL-CICD.md`.
