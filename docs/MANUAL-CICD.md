@@ -200,15 +200,16 @@ Se a versão nova apresentar problema, altere temporariamente no Render a refer�
 - [ ] enviar os novos arquivos ao GitHub;
 - [x] GHCR público e serviço Render configurados;
 - [x] URL pública e health check validados;
-- [ ] confirmar a primeira execução totalmente verde após cadastrar os secrets.
+- [x] primeira execução totalmente verde após cadastrar os secrets.
 
 ## 13. Evidências da execução
 
 - Repositório: <https://github.com/luismfrk/ContratacaoMallet>
-- Commit inicial da integração: `1ec769f3bb9a003e84615d378cc60e1d6c57ef3e`
-- Execução: <https://github.com/luismfrk/ContratacaoMallet/actions/runs/33985941887>
-- Testes Python: aprovados em 17 segundos;
-- build e publicação da imagem: aprovados em 42 segundos;
+- Commit final da integração: `cccff0c1b45d68e722ca27b3c1ca7efa99372658`
+- Execução final: <https://github.com/luismfrk/ContratacaoMallet/actions/runs/33986964210>
+- Testes Python: aprovados em 11 segundos;
+- build e publicação da imagem: aprovados em 21 segundos;
+- deploy automático no Render: aprovado em 32 segundos;
 - imagem: `ghcr.io/luismfrk/contratacaomallet:latest`;
 - digest publicado: `sha256:940993a2c135927ef19fb2cad2cc4cb8ef24056d85639e920bfe4222e005a3d5`;
 - serviço: <https://contratacao-mallet.onrender.com>;
