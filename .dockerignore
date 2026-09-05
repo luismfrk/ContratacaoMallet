@@ -1,0 +1,15 @@
+.git
+.github
+.env
+__pycache__/
+*.py[cod]
+*.db
+*.log
+.pytest_cache/
+.venv/
+venv/
+tests/
+docs/
+orcamento*_teste.pdf
+publicar_cloudflare.bat
+run.bat
