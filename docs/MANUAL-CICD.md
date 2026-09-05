@@ -10,6 +10,10 @@ O ContratacaoMallet é uma aplicação web para elaboração e gestão de docume
 
 O objetivo do pipeline é fazer cada alteração na branch `main` chegar automaticamente à produção somente depois de passar por validação de sintaxe e testes.
 
+![Fluxo CI/CD do ContratacaoMallet](fluxo-cicd-contratacao-mallet.png)
+
+**Figura 1 — Fluxo automatizado do desenvolvimento até a aplicação em produção.**
+
 ```text
 Desenvolvedor
      │ git push
