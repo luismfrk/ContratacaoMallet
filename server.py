@@ -1,11 +1,12 @@
 import os
+import json
 from urllib.parse import quote
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 from io import BytesIO
 
-from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, Response, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
 from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse
@@ -20,13 +21,17 @@ from etp_obras import gerar_etp_obras
 from etp_obras_docx_exporter import gerar_etp_obras_docx
 from tr import gerar_tr, listar_tipos_tr
 from tr_docx_exporter import gerar_tr_docx
-from requisicao import ler_orcamento, gerar_requisicao
+from requisicao import (ler_orcamento, gerar_requisicao, ler_relacao_pneus,
+                        gerar_requisicoes_pneus, ler_demonstrativo_impressoras,
+                        gerar_requisicao_impressoras, ler_saldos_materiais_construcao,
+                        gerar_requisicao_material_construcao, gerar_requisicoes_material_construcao)
 from relatorio_requisicoes import gerar_relatorio_requisicoes
 from database import Repositorio
 from auth import (
     COOKIE_NAME,
     SESSION_SECONDS,
     ServicoAutenticacao,
+    usuario_pode_acessar_secretaria,
     perfil_autocadastro,
 )
 
@@ -150,6 +155,30 @@ def exigir_admin(request: Request) -> dict[str, Any]:
     return usuario
 
 
+def exigir_acesso_secretaria(usuario: dict[str, Any], secretaria: str) -> None:
+    if not usuario_pode_acessar_secretaria(usuario, secretaria):
+        raise HTTPException(
+            status_code=403,
+            detail="Você não possui acesso à secretaria informada.",
+        )
+
+
+def exigir_acesso_contratacao(usuario: dict[str, Any], contratacao_id: int) -> dict[str, Any]:
+    try:
+        contratacao = repositorio.obter_contratacao(contratacao_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    exigir_acesso_secretaria(usuario, contratacao["secretaria"])
+    return contratacao
+
+
+def exigir_acesso_dados_documento(usuario: dict[str, Any], dados: dict[str, Any]) -> None:
+    secretaria = next((str(dados.get(campo) or "").strip()
+                       for campo in ("secretaria", "unidade_requisitante", "solicitante")
+                       if dados.get(campo)), "")
+    exigir_acesso_secretaria(usuario, secretaria)
+
+
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
     return (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
@@ -266,12 +295,16 @@ def listar_contratacoes(request: Request) -> dict[str, Any]:
     usuario = request.state.usuario
     if usuario["perfil"] != "admin" and not usuario.get("secretaria"):
         return {"contratacoes": []}
-    return {"contratacoes": repositorio.listar_contratacoes(
-        None, "" if usuario["perfil"] == "admin" else usuario.get("secretaria", ""))}
+    contratacoes = repositorio.listar_contratacoes()
+    if usuario["perfil"] != "admin":
+        contratacoes = [item for item in contratacoes
+                        if usuario_pode_acessar_secretaria(usuario, item["secretaria"])]
+    return {"contratacoes": contratacoes}
 
 
 @app.post("/api/contratacoes")
 def criar_contratacao(request: Request, dados: ContratacaoRequest) -> dict[str, Any]:
+    exigir_acesso_secretaria(request.state.usuario, dados.secretaria)
     try:
         contratacao = repositorio.criar_contratacao(
             dados.titulo,
@@ -287,8 +320,7 @@ def criar_contratacao(request: Request, dados: ContratacaoRequest) -> dict[str, 
 @app.get("/api/contratacoes/{contratacao_id}/documentos")
 def listar_documentos(contratacao_id: int, request: Request) -> dict[str, Any]:
     usuario = request.state.usuario
-    if not repositorio.usuario_pode_acessar_contratacao(contratacao_id, usuario["id"], usuario["perfil"] == "admin"):
-        raise HTTPException(status_code=404, detail="Contratação não encontrada.")
+    exigir_acesso_contratacao(usuario, contratacao_id)
     try:
         documentos = repositorio.listar_documentos(contratacao_id)
     except ValueError as exc:
@@ -299,12 +331,11 @@ def listar_documentos(contratacao_id: int, request: Request) -> dict[str, Any]:
 @app.get("/api/documentos/{documento_id}")
 def obter_documento(documento_id: int, request: Request) -> dict[str, Any]:
     usuario = request.state.usuario
-    if not repositorio.usuario_pode_acessar_documento(documento_id, usuario["id"], usuario["perfil"] == "admin"):
-        raise HTTPException(status_code=404, detail="Documento não encontrado.")
     try:
         documento = repositorio.obter_documento(documento_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    exigir_acesso_contratacao(usuario, documento["contratacao_id"])
     return {"documento": documento}
 
 
@@ -313,8 +344,8 @@ def salvar_documento(
     contratacao_id: int, request: Request, dados: DocumentoRequest
 ) -> dict[str, Any]:
     usuario = request.state.usuario
-    if not repositorio.usuario_pode_acessar_contratacao(contratacao_id, usuario["id"], usuario["perfil"] == "admin"):
-        raise HTTPException(status_code=404, detail="Contratação não encontrada.")
+    exigir_acesso_contratacao(usuario, contratacao_id)
+    exigir_acesso_dados_documento(usuario, dados.dados)
     try:
         documento = repositorio.salvar_documento(
             contratacao_id,
@@ -334,18 +365,20 @@ def tipos_dfd() -> dict[str, Any]:
 
 
 @app.post("/api/dfd/generate")
-def generate_dfd(request: DFDRequest) -> dict[str, Any]:
+def generate_dfd(request: Request, dados_request: DFDRequest) -> dict[str, Any]:
+    exigir_acesso_dados_documento(request.state.usuario, dados_request.dados)
     try:
-        resultado = gerar_dfd(request.tipo, request.dados)
+        resultado = gerar_dfd(dados_request.tipo, dados_request.dados)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"success": True, "resultado": resultado}
 
 
 @app.post("/api/dfd/download")
-def download_dfd(request: DFDRequest) -> StreamingResponse:
+def download_dfd(request: Request, dados_request: DFDRequest) -> StreamingResponse:
+    exigir_acesso_dados_documento(request.state.usuario, dados_request.dados)
     try:
-        conteudo, nome_arquivo = gerar_dfd_docx(request.tipo, request.dados)
+        conteudo, nome_arquivo = gerar_dfd_docx(dados_request.tipo, dados_request.dados)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -360,18 +393,20 @@ def download_dfd(request: DFDRequest) -> StreamingResponse:
 
 
 @app.post("/api/etp/generate")
-def generate_etp(request: ETPRequest) -> dict[str, Any]:
+def generate_etp(request: Request, dados_request: ETPRequest) -> dict[str, Any]:
+    exigir_acesso_dados_documento(request.state.usuario, dados_request.dados)
     try:
-        resultado = gerar_etp(request.dados)
+        resultado = gerar_etp(dados_request.dados)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"success": True, "resultado": resultado}
 
 
 @app.post("/api/etp/download")
-def download_etp(request: ETPRequest) -> StreamingResponse:
+def download_etp(request: Request, dados_request: ETPRequest) -> StreamingResponse:
+    exigir_acesso_dados_documento(request.state.usuario, dados_request.dados)
     try:
-        conteudo, nome_arquivo = gerar_etp_docx(request.dados)
+        conteudo, nome_arquivo = gerar_etp_docx(dados_request.dados)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return StreamingResponse(
@@ -384,18 +419,20 @@ def download_etp(request: ETPRequest) -> StreamingResponse:
 
 
 @app.post("/api/etp/obras/generate")
-def generate_etp_obras(request: ETPRequest) -> dict[str, Any]:
+def generate_etp_obras(request: Request, dados_request: ETPRequest) -> dict[str, Any]:
+    exigir_acesso_dados_documento(request.state.usuario, dados_request.dados)
     try:
-        resultado = gerar_etp_obras(request.dados)
+        resultado = gerar_etp_obras(dados_request.dados)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"success": True, "resultado": resultado}
 
 
 @app.post("/api/etp/obras/download")
-def download_etp_obras(request: ETPRequest) -> StreamingResponse:
+def download_etp_obras(request: Request, dados_request: ETPRequest) -> StreamingResponse:
+    exigir_acesso_dados_documento(request.state.usuario, dados_request.dados)
     try:
-        conteudo, nome_arquivo = gerar_etp_obras_docx(request.dados)
+        conteudo, nome_arquivo = gerar_etp_obras_docx(dados_request.dados)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return StreamingResponse(
@@ -413,18 +450,20 @@ def tipos_tr() -> dict[str, Any]:
 
 
 @app.post("/api/tr/generate")
-def generate_tr(request: TRRequest) -> dict[str, Any]:
+def generate_tr(request: Request, dados_request: TRRequest) -> dict[str, Any]:
+    exigir_acesso_dados_documento(request.state.usuario, dados_request.dados)
     try:
-        resultado = gerar_tr(request.tipo, request.dados)
+        resultado = gerar_tr(dados_request.tipo, dados_request.dados)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"success": True, "resultado": resultado}
 
 
 @app.post("/api/tr/download")
-def download_tr(request: TRRequest) -> StreamingResponse:
+def download_tr(request: Request, dados_request: TRRequest) -> StreamingResponse:
+    exigir_acesso_dados_documento(request.state.usuario, dados_request.dados)
     try:
-        conteudo, nome_arquivo = gerar_tr_docx(request.tipo, request.dados)
+        conteudo, nome_arquivo = gerar_tr_docx(dados_request.tipo, dados_request.dados)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return StreamingResponse(
@@ -447,18 +486,168 @@ async def importar_orcamento(arquivo: UploadFile = File(...)) -> dict[str, Any]:
     return {"success": True, "resultado": resultado}
 
 
+@app.post("/api/requisicoes/pneus/importar")
+async def importar_relacao_pneus(arquivo: UploadFile = File(...)) -> dict[str, Any]:
+    if not arquivo.filename or not arquivo.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Envie a relação dos itens no formato PDF.")
+    conteudo = await arquivo.read(10 * 1024 * 1024 + 1)
+    try:
+        resultado = ler_relacao_pneus(conteudo)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"success": True, "resultado": resultado}
+
+
+@app.post("/api/requisicoes/materiais-construcao/saldos")
+async def importar_saldos_materiais_construcao(arquivo: UploadFile = File(...)) -> dict[str, Any]:
+    if not arquivo.filename or not arquivo.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Envie o controle de saldo no formato PDF.")
+    try:
+        resultado = ler_saldos_materiais_construcao(await arquivo.read(10 * 1024 * 1024 + 1))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"success": True, "resultado": resultado}
+
+
+@app.post("/api/requisicoes/materiais-construcao/download")
+def download_requisicao_material_construcao(
+    request: Request, dados_request: RequisicaoRequest
+) -> StreamingResponse:
+    try:
+        dados = dados_request.dados
+        secretaria = str(dados.get("secretaria") or "").strip()
+        exigir_acesso_secretaria(request.state.usuario, secretaria)
+        conteudo, nome, total = gerar_requisicao_material_construcao(dados)
+        lote = dados.get("lote") or {}
+        repositorio.registrar_requisicao({
+            "placa": f"LOTE {lote.get('numero', '')}",
+            "numero_orcamento": dados.get("numero_orcamento", ""),
+            "secretaria": secretaria, "tipo": "material_construcao",
+            "fornecedor": dados.get("fornecedor") or lote.get("fornecedor", ""),
+            "valor_total": total, "emitida_em": datetime.now().isoformat(),
+        }, request.state.usuario["id"])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return StreamingResponse(
+        BytesIO(conteudo),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(nome)}"},
+    )
+
+
+@app.post("/api/requisicoes/materiais-construcao/download-zip")
+def download_requisicoes_material_construcao_zip(
+    request: Request, dados_request: RequisicaoRequest
+) -> StreamingResponse:
+    try:
+        dados = dados_request.dados
+        secretaria = str(dados.get("secretaria") or "").strip()
+        exigir_acesso_secretaria(request.state.usuario, secretaria)
+        conteudo, nome, registros = gerar_requisicoes_material_construcao(dados)
+        for registro in registros:
+            lote = registro["lote"]
+            repositorio.registrar_requisicao({
+                "placa": f"LOTE {lote.get('numero', '')}",
+                "numero_orcamento": dados.get("numero_orcamento", ""),
+                "secretaria": secretaria, "tipo": "material_construcao",
+                "fornecedor": registro["fornecedor"],
+                "valor_total": registro["valor_total"],
+                "emitida_em": datetime.now().isoformat(),
+            }, request.state.usuario["id"])
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return StreamingResponse(
+        BytesIO(conteudo), media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(nome)}"},
+    )
+
+
+@app.post("/api/requisicoes/impressoras/importar")
+async def importar_demonstrativo_impressoras(
+    request: Request, arquivo: UploadFile = File(...), secretaria: str = Form("")
+) -> dict[str, Any]:
+    if not arquivo.filename or not arquivo.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Envie o demonstrativo no formato PDF.")
+    exigir_acesso_secretaria(request.state.usuario, secretaria)
+    try:
+        resultado = ler_demonstrativo_impressoras(await arquivo.read(10 * 1024 * 1024 + 1))
+        resultado["grupos"] = [g for g in resultado["grupos"] if not secretaria or g["secretaria"] == secretaria]
+        if secretaria and not resultado["grupos"]:
+            raise ValueError(f"O demonstrativo não possui produção para a secretaria {secretaria}.")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"success": True, "resultado": resultado}
+
+
+@app.post("/api/requisicoes/impressoras/download")
+async def download_requisicao_impressoras(
+    request: Request, arquivo: UploadFile = File(...), dados_json: str = Form(...)
+) -> StreamingResponse:
+    try:
+        dados = json.loads(dados_json)
+        secretaria = str(dados.get("secretaria") or "").strip()
+        exigir_acesso_secretaria(request.state.usuario, secretaria)
+        conteudo, nome, total = gerar_requisicao_impressoras(
+            await arquivo.read(10 * 1024 * 1024 + 1), dados
+        )
+        repositorio.registrar_requisicao({
+            "placa": "IMPRESSORAS", "numero_orcamento": dados.get("contrato", ""),
+            "secretaria": secretaria, "tipo": "impressora",
+            "fornecedor": "ETP PRINTERS LTDA", "valor_total": total,
+            "emitida_em": datetime.now().isoformat(),
+        }, request.state.usuario["id"])
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return StreamingResponse(
+        BytesIO(conteudo),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(nome)}"},
+    )
+
+
+@app.post("/api/requisicoes/pneus/download")
+async def download_requisicoes_pneus(
+    request: Request, arquivo: UploadFile = File(...), dados_json: str = Form(...)
+) -> StreamingResponse:
+    try:
+        dados = json.loads(dados_json)
+        if not isinstance(dados, dict):
+            raise ValueError("Dados da requisição de pneus inválidos.")
+        secretaria = str(dados.get("secretaria") or "").strip()
+        exigir_acesso_secretaria(request.state.usuario, secretaria)
+        conteudo_pdf = await arquivo.read(10 * 1024 * 1024 + 1)
+        conteudo, nome, registros = gerar_requisicoes_pneus(conteudo_pdf, dados)
+        for registro in registros:
+            repositorio.registrar_requisicao({
+                "placa": str(dados.get("placa") or "PNEUS").strip().upper(),
+                "numero_orcamento": "",
+                "secretaria": secretaria,
+                "tipo": "pneu",
+                "fornecedor": registro["fornecedor"],
+                "valor_total": registro["valor_total"],
+                "emitida_em": datetime.now().isoformat(),
+            }, request.state.usuario["id"])
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return StreamingResponse(
+        BytesIO(conteudo), media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(nome)}"},
+    )
+
+
 @app.post("/api/requisicoes/download")
 def download_requisicao(request: Request, dados_request: RequisicaoRequest) -> StreamingResponse:
     try:
-        conteudo, nome = gerar_requisicao(dados_request.tipo, dados_request.dados)
         dados = dados_request.dados
+        secretaria = str(dados.get("secretaria") or "").strip()
+        exigir_acesso_secretaria(request.state.usuario, secretaria)
+        conteudo, nome = gerar_requisicao(dados_request.tipo, dados)
         desconto_geral = float(dados.get("desconto") or 0)
         total = 0.0
         for item in dados.get("itens", []):
             desconto = float(item.get("desconto", desconto_geral) or 0)
             total += float(item.get("quantidade", 0)) * float(item.get("valor_unitario", 0)) * (1 - desconto / 100)
         placa = str(dados.get("placa") or "").strip().upper()
-        secretaria = str(dados.get("secretaria") or "").strip()
         if not placa or not secretaria:
             raise ValueError("Informe a placa e selecione a secretaria para registrar a requisição.")
         repositorio.registrar_requisicao({
@@ -481,8 +670,11 @@ def relatorio_requisicoes(request: Request, ano: int, mes: int, secretaria: str 
     if ano < 2020 or ano > 2100 or mes < 1 or mes > 12:
         raise HTTPException(status_code=400, detail="Informe um mês e ano válidos.")
     usuario = request.state.usuario
+    if usuario["perfil"] != "admin":
+        secretaria = str(usuario.get("secretaria") or "")
+        exigir_acesso_secretaria(usuario, secretaria)
     linhas = repositorio.relatorio_requisicoes(
-        ano, mes, secretaria, None if usuario["perfil"] == "admin" else usuario["id"])
+        ano, mes, secretaria)
     conteudo, nome = gerar_relatorio_requisicoes(linhas, ano, mes, secretaria)
     return StreamingResponse(BytesIO(conteudo), media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(nome)}"})

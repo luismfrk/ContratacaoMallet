@@ -4,12 +4,34 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
+import unicodedata
 
 from pwdlib import PasswordHash
 
 from database import Repositorio
 
 COOKIE_NAME = "contratacoes_session"
+
+
+def normalizar_secretaria(secretaria: str) -> str:
+    """Normaliza nomes como 'Educação' e 'Secretaria Municipal de Educação'."""
+    valor = unicodedata.normalize("NFKD", (secretaria or "").strip().casefold())
+    valor = "".join(caractere for caractere in valor if not unicodedata.combining(caractere))
+    for prefixo in ("secretaria municipal de ", "secretaria municipal da ",
+                    "secretaria municipal do ", "secretaria de ",
+                    "secretaria da ", "secretaria do "):
+        if valor.startswith(prefixo):
+            valor = valor[len(prefixo):]
+            break
+    return " ".join(valor.split())
+
+
+def usuario_pode_acessar_secretaria(usuario: dict[str, Any], secretaria: str) -> bool:
+    if usuario.get("perfil") == "admin":
+        return True
+    permitida = normalizar_secretaria(str(usuario.get("secretaria") or ""))
+    solicitada = normalizar_secretaria(secretaria)
+    return bool(permitida and solicitada and permitida == solicitada)
 SESSION_SECONDS = 8 * 60 * 60
 password_hash = PasswordHash.recommended()
 

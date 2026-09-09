@@ -561,7 +561,7 @@ class Repositorio:
     def relatorio_requisicoes(self, ano: int, mes: int, secretaria: str = "", usuario_id: int | None = None) -> list[dict[str, Any]]:
         prefixo = f"{ano:04d}-{mes:02d}"
         sql = """SELECT placa,
-                    SUM(CASE WHEN tipo = 'material' THEN valor_total ELSE 0 END) AS materiais,
+                    SUM(CASE WHEN tipo IN ('material', 'pneu') THEN valor_total ELSE 0 END) AS materiais,
                     SUM(CASE WHEN tipo = 'servico' THEN valor_total ELSE 0 END) AS servicos,
                     SUM(valor_total) AS total, COUNT(*) AS requisicoes
                  FROM requisicoes WHERE emitida_em LIKE ?"""

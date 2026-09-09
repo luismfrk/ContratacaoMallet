@@ -35,7 +35,8 @@ def gerar_relatorio_requisicoes(linhas: list[dict], ano: int, mes: int, secretar
     ws.cell(total_linha, 1, "TOTAL DO MÊS").font = Font(bold=True)
     for coluna in range(3, 6):
         letra = get_column_letter(coluna)
-        ws.cell(total_linha, coluna, f"=SUM({letra}5:{letra}{total_linha - 1})")
+        valor_total = f"=SUM({letra}5:{letra}{total_linha - 1})" if linhas else 0
+        ws.cell(total_linha, coluna, valor_total)
         ws.cell(total_linha, coluna).font = Font(bold=True)
         ws.cell(total_linha, coluna).number_format = 'R$ #,##0.00'
     for coluna, largura in enumerate((22, 14, 18, 18, 20), 1):

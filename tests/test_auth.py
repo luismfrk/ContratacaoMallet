@@ -7,6 +7,8 @@ from auth import (
     hash_token,
     perfil_autocadastro,
     validar_senha_nova,
+    normalizar_secretaria,
+    usuario_pode_acessar_secretaria,
 )
 from database import Repositorio
 
@@ -76,6 +78,17 @@ class TestAutenticacao(unittest.TestCase):
         self.assertEqual(perfil_autocadastro(0), "admin")
         self.assertEqual(perfil_autocadastro(1), "editor")
         self.assertEqual(perfil_autocadastro(10), "editor")
+
+    def test_restringe_editor_a_secretaria_atribuida(self) -> None:
+        usuario = {"perfil": "editor", "secretaria": "Educação"}
+        self.assertTrue(usuario_pode_acessar_secretaria(
+            usuario, "Secretaria Municipal de Educação"))
+        self.assertFalse(usuario_pode_acessar_secretaria(usuario, "Saúde"))
+        self.assertEqual(normalizar_secretaria("  SECRETARIA DE EDUCAÇÃO "), "educacao")
+
+    def test_administrador_acessa_todas_as_secretarias(self) -> None:
+        usuario = {"perfil": "admin", "secretaria": ""}
+        self.assertTrue(usuario_pode_acessar_secretaria(usuario, "Saúde"))
 
 
 if __name__ == "__main__":

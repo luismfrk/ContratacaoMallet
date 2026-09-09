@@ -26,7 +26,7 @@ if errorlevel 1 (
 )
 
 del /q tunnel.stdout.log tunnel.stderr.log >nul 2>&1
-powershell -NoProfile -Command "Start-Process -WindowStyle Hidden -FilePath cloudflared -ArgumentList 'tunnel --url http://127.0.0.1:8000 --no-autoupdate' -WorkingDirectory '%CD%' -RedirectStandardOutput '%CD%\tunnel.stdout.log' -RedirectStandardError '%CD%\tunnel.stderr.log'"
+powershell -NoProfile -Command "Start-Process -WindowStyle Hidden -FilePath cloudflared -ArgumentList 'tunnel --protocol http2 --url http://127.0.0.1:8000 --no-autoupdate' -WorkingDirectory '%CD%' -RedirectStandardOutput '%CD%\tunnel.stdout.log' -RedirectStandardError '%CD%\tunnel.stderr.log'"
 
 echo Aguardando o Cloudflare gerar o endereco publico...
 ping 127.0.0.1 -n 9 >nul

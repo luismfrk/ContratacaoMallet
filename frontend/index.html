@@ -4,10 +4,34 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Contratações Públicas</title>
-    <link rel="stylesheet" href="/static/styles.css?v=5" />
+    <link rel="stylesheet" href="/static/styles.css?v=12" />
   </head>
   <body>
     <div id="auth-overlay" class="modal-overlay">
+      <div class="auth-layout">
+      <section id="auth-carousel" class="auth-carousel" aria-label="Pontos turísticos de Mallet">
+        <div class="carousel-track">
+          <figure class="carousel-slide active">
+            <img src="/static/images/mallet-igreja-ucraniana.webp" alt="Igreja ucraniana de arquitetura tradicional em Mallet" />
+            <figcaption>Igreja de São Miguel Arcanjo </figcaption>
+          </figure>
+          <figure class="carousel-slide">
+            <img src="/static/images/mallet-praca.webp" alt="Coreto sobre o lago em uma praça de Mallet" />
+            <figcaption>Parque dos Imigrantes</figcaption>
+          </figure>
+          <figure class="carousel-slide">
+            <img src="/static/images/mallet-prefeitura.webp" alt="Sede da Prefeitura Municipal de Mallet" />
+            <figcaption>Prefeitura Municipal de Mallet</figcaption>
+          </figure>
+        </div>
+        <button class="carousel-control previous" type="button" aria-label="Foto anterior">‹</button>
+        <button class="carousel-control next" type="button" aria-label="Próxima foto">›</button>
+        <div class="carousel-dots" role="group" aria-label="Selecionar foto">
+          <button class="active" type="button" aria-label="Mostrar foto 1" aria-current="true"></button>
+          <button type="button" aria-label="Mostrar foto 2"></button>
+          <button type="button" aria-label="Mostrar foto 3"></button>
+        </div>
+      </section>
       <section class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
         <div class="auth-brand">
           <img src="/static/brasao-mallet.png" alt="Brasão do Município de Mallet" />
@@ -48,6 +72,7 @@
           <button id="auth-submit" type="submit">Entrar</button>
         </form>
       </section>
+      </div>
     </div>
 
     <div id="users-overlay" class="modal-overlay hidden">
@@ -73,6 +98,7 @@
                 <option value="">Selecione...</option>
                 <option>Administração</option><option>Agropecuária e Abastecimento</option>
                 <option>Cultura e Turismo</option><option>Educação</option><option>Esportes</option>
+                <option>Defesa Civil</option><option>Gabinete</option>
                 <option>Família e Desenvolvimento Social</option><option>Fazenda</option>
                 <option>Indústria e Comércio</option><option>Meio Ambiente e Recursos Hídricos</option>
                 <option>Obras e Serviços Públicos</option><option>Planejamento</option>
@@ -103,8 +129,13 @@
         </div>
         <div class="brand-copy">
           <h1>Sistema de Contratações Públicas</h1>
+          <p>Prefeitura Municipal de Mallet</p>
         </div>
         <div class="header-actions">
+          <button id="view-mode" class="view-switch" type="button" role="switch" aria-checked="false" aria-label="Ativar design mobile" title="Ativar design mobile">
+            <span class="view-switch-label">Mobile</span>
+            <span class="view-switch-track" aria-hidden="true"><span></span></span>
+          </button>
           <div class="system-chip">
             <span class="ion-icon icon-desktop" aria-hidden="true"></span>
             Sistema online
@@ -131,19 +162,21 @@
           </div>
           <div>
             <p class="eyebrow">Área de trabalho</p>
-            <h2>Secretaria e contratação</h2>
+            <h2>Bem-vindo, <span id="workspace-user-name">usuário</span></h2>
             <p>Selecione a secretaria responsável e acesse seus processos.</p>
           </div>
         </div>
         <div class="contract-selector">
-          <label for="current-secretariat">Secretaria selecionada</label>
+          <label id="secretariat-select-label" for="current-secretariat">Secretaria selecionada</label>
           <select id="current-secretariat">
             <option value="">Selecione uma secretaria</option>
             <option>Administração</option>
             <option>Agropecuária e Abastecimento</option>
             <option>Cultura e Turismo</option>
+            <option>Defesa Civil</option>
             <option>Educação</option>
             <option>Esportes</option>
+            <option>Gabinete</option>
             <option>Família e Desenvolvimento Social</option>
             <option>Fazenda</option>
             <option>Indústria e Comércio</option>
@@ -154,6 +187,9 @@
             <option>Saúde</option>
             <option>UCI - Unidade de Controle Interno</option>
           </select>
+          <div id="fixed-secretariat" class="fixed-secretariat hidden" aria-label="Secretaria vinculada ao usuário">
+            <strong id="fixed-secretariat-name"></strong>
+          </div>
         </div>
         <div class="new-contract-area">
           <p class="panel-label">Nova contratação</p>
@@ -192,6 +228,10 @@
           <b><span class="ion-icon icon-document" aria-hidden="true"></span></b>
           <span><strong>Requisição</strong><small>Gerar a partir do orçamento</small></span>
         </button>
+        <div class="nav-help">
+          <strong><span class="ion-icon icon-bulb" aria-hidden="true"></span> Como começar</strong>
+          <p>Selecione uma secretaria e um processo antes de preencher os documentos.</p>
+        </div>
       </aside>
 
       <section id="dfd-module" class="card hidden">
@@ -688,7 +728,7 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">Requisição interna</p>
-            <h2>Gerar requisição pelo orçamento</h2>
+            <h2>Gerar requisição</h2>
           </div>
           <span class="badge">Excel</span>
         </div>
@@ -699,26 +739,60 @@
               <label>Tipo da requisição <span>*</span>
                 <select id="requisicao-tipo" required>
                   <option value="material">Material / peças</option>
+                  <option value="material_construcao">Materiais de construção (com saldo)</option>
                   <option value="servico">Serviços</option>
+                  <option value="pneu">Pneus</option>
+                  <option value="impressora">Impressoras</option>
                 </select>
               </label>
-              <label>Orçamento (PDF ou .xlsx) <span>*</span>
+              <label><span id="requisicao-arquivo-label">Orçamento (PDF ou .xlsx)</span> <span>*</span>
                 <input id="requisicao-arquivo" type="file" accept=".pdf,.xlsx,application/pdf" required />
               </label>
             </div>
             <button id="requisicao-importar" class="secondary-button" type="button">Ler orçamento</button>
+            <div id="construcao-saldo" class="hidden">
+              <div class="grid two">
+                <label>Controle de saldo dos contratos (PDF) <span>*</span>
+                  <input id="construcao-saldo-arquivo" type="file" accept=".pdf,application/pdf" />
+                </label>
+                <label>Lote/contrato <span>*</span>
+                  <select id="construcao-lote"><option value="">Importe o controle de saldo</option></select>
+                </label>
+              </div>
+              <button id="construcao-saldo-importar" class="secondary-button" type="button">Ler controle de saldo</button>
+            </div>
+            <div id="pneu-selecao" class="hidden">
+              <label>Números dos itens desejados <span>*</span>
+                <input id="pneu-numeros" placeholder="Ex.: 1, 4, 39" />
+                <small>Separe os números por vírgula, espaço ou ponto e vírgula.</small>
+              </label>
+              <button id="pneu-localizar" class="secondary-button" type="button">Localizar itens</button>
+            </div>
           </fieldset>
           <fieldset>
             <legend>2. Dados da requisição</legend>
             <div class="grid two">
-              <label>Fornecedor <span>*</span><input id="requisicao-fornecedor" required /></label>
-              <label>Cidade <span>*</span><input id="requisicao-cidade" value="MALLET" required /></label>
-              <label class="full-width">Endereço <span>*</span><input id="requisicao-endereco" required /></label>
+              <label class="orcamento-only">Fornecedor <span>*</span><input id="requisicao-fornecedor" required /></label>
+              <label class="orcamento-only">Cidade <span>*</span><input id="requisicao-cidade" value="MALLET" required /></label>
+              <label class="full-width orcamento-only">Endereço <span>*</span><input id="requisicao-endereco" required /></label>
               <label>Destino <span>*</span><input id="requisicao-destino" required /></label>
               <label>Fonte/Recurso <span>*</span><input id="requisicao-fonte" required /></label>
-              <label>Identificação (placa e ordem) <span>*</span><input id="requisicao-identificacao" placeholder="PLACA- ABC-1D23  ORDEM- 123/2026" required /></label>
-              <label>Desconto geral (%) <input id="requisicao-desconto" type="number" min="0" max="100" step="0.01" value="0" /></label>
+              <label id="requisicao-identificacao-campo">Identificação (placa e ordem) <span>*</span><input id="requisicao-identificacao" placeholder="PLACA- ABC-1D23  ORDEM- 123/2026" required /></label>
+              <label class="orcamento-only">Desconto geral (%) <input id="requisicao-desconto" type="number" min="0" max="100" step="0.01" value="0" /></label>
+              <label class="pneu-only hidden">Responsável <span>*</span><input id="pneu-responsavel-nome" /></label>
+              <label class="pneu-only hidden">Cargo/função <span>*</span><input id="pneu-responsavel-cargo" /></label>
+              <label class="pneu-only hidden">Ato ou decreto <input id="pneu-responsavel-ato" placeholder="Ex.: Decreto Mun. 051/2025" /></label>
+              <label class="impressora-only hidden">Contrato <span>*</span><input id="impressora-contrato" placeholder="Ex.: 187/23" /></label>
+              <label class="impressora-only hidden">Responsável <span>*</span><input id="impressora-responsavel-nome" /></label>
+              <label class="impressora-only hidden">Cargo/função <span>*</span><input id="impressora-responsavel-cargo" /></label>
+              <label class="impressora-only hidden">Ato ou decreto <input id="impressora-responsavel-ato" placeholder="Ex.: Decreto Municipal 051/2025" /></label>
             </div>
+            <div class="grid two construcao-only hidden">
+              <label>Responsável <span>*</span><input id="construcao-responsavel-nome" /></label>
+              <label>Cargo/função <span>*</span><input id="construcao-responsavel-cargo" /></label>
+              <label>Ato ou decreto <input id="construcao-responsavel-ato" placeholder="Ex.: DEC 045/2025" /></label>
+            </div>
+            <div id="pneu-fornecedores" class="hidden"></div>
           </fieldset>
           <fieldset>
             <legend>3. Itens encontrados</legend>
@@ -741,6 +815,7 @@
         </section>
       </section>
     </main>
-    <script src="/static/app.js?v=10"></script>
+    <footer class="developer-credit">Developed by @luis.mfrk</footer>
+    <script src="/static/app-pneus-v2-20260818.js?v=9"></script>
   </body>
 </html>

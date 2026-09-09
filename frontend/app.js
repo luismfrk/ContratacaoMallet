@@ -37,6 +37,13 @@ const requisicaoItens = document.getElementById("requisicao-itens");
 const requisicaoResumo = document.getElementById("requisicao-resumo");
 const requisicaoStatus = document.getElementById("requisicao-status");
 const requisicaoDownload = document.getElementById("requisicao-download");
+const requisicaoTipo = document.getElementById("requisicao-tipo");
+const pneuSelecao = document.getElementById("pneu-selecao");
+const pneuNumeros = document.getElementById("pneu-numeros");
+const pneuFornecedores = document.getElementById("pneu-fornecedores");
+const construcaoSaldo = document.getElementById("construcao-saldo");
+const construcaoSaldoArquivo = document.getElementById("construcao-saldo-arquivo");
+const construcaoLote = document.getElementById("construcao-lote");
 const trForm = document.getElementById("tr-form");
 const trTipo = document.getElementById("tr-tipo");
 const trFornecedor = document.getElementById("tr-fornecedor");
@@ -73,6 +80,10 @@ const authPasswordHelp = document.getElementById("auth-password-help");
 const authStatus = document.getElementById("auth-status");
 const authSubmit = document.getElementById("auth-submit");
 const currentUserName = document.getElementById("current-user-name");
+const workspaceUserName = document.getElementById("workspace-user-name");
+const secretariatSelectLabel = document.getElementById("secretariat-select-label");
+const fixedSecretariat = document.getElementById("fixed-secretariat");
+const fixedSecretariatName = document.getElementById("fixed-secretariat-name");
 const userChip = document.getElementById("user-chip");
 const logoutButton = document.getElementById("logout-button");
 const manageUsers = document.getElementById("manage-users");
@@ -93,6 +104,57 @@ const cancelUserEdit = document.getElementById("cancel-user-edit");
 const userStatus = document.getElementById("user-status");
 const loginTab = document.getElementById("login-tab");
 const registerTab = document.getElementById("register-tab");
+const authCarousel = document.getElementById("auth-carousel");
+const viewMode = document.getElementById("view-mode");
+
+function aplicarModoVisualizacao(modo) {
+  const modoValido = modo === "mobile" ? "mobile" : "auto";
+  if (modoValido === "mobile") {
+    document.documentElement.dataset.layoutMode = "mobile";
+  } else {
+    delete document.documentElement.dataset.layoutMode;
+  }
+  const mobileAtivo = modoValido === "mobile";
+  viewMode.setAttribute("aria-checked", String(mobileAtivo));
+  viewMode.setAttribute("aria-label", mobileAtivo ? "Desativar design mobile" : "Ativar design mobile");
+  viewMode.title = mobileAtivo ? "Desativar design mobile" : "Ativar design mobile";
+  localStorage.setItem("modo-visualizacao", modoValido);
+}
+
+aplicarModoVisualizacao(localStorage.getItem("modo-visualizacao"));
+viewMode.addEventListener("click", () => {
+  aplicarModoVisualizacao(document.documentElement.dataset.layoutMode === "mobile" ? "auto" : "mobile");
+});
+const carouselSlides = [...authCarousel.querySelectorAll(".carousel-slide")];
+const carouselDots = [...authCarousel.querySelectorAll(".carousel-dots button")];
+let carouselIndex = 0;
+let carouselTimer = null;
+
+function mostrarFoto(indice) {
+  carouselIndex = (indice + carouselSlides.length) % carouselSlides.length;
+  carouselSlides.forEach((slide, posicao) => slide.classList.toggle("active", posicao === carouselIndex));
+  carouselDots.forEach((dot, posicao) => {
+    const ativo = posicao === carouselIndex;
+    dot.classList.toggle("active", ativo);
+    dot.toggleAttribute("aria-current", ativo);
+  });
+}
+
+function iniciarCarousel() {
+  clearInterval(carouselTimer);
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    carouselTimer = setInterval(() => mostrarFoto(carouselIndex + 1), 5500);
+  }
+}
+
+authCarousel.querySelector(".previous").addEventListener("click", () => { mostrarFoto(carouselIndex - 1); iniciarCarousel(); });
+authCarousel.querySelector(".next").addEventListener("click", () => { mostrarFoto(carouselIndex + 1); iniciarCarousel(); });
+carouselDots.forEach((dot, indice) => dot.addEventListener("click", () => { mostrarFoto(indice); iniciarCarousel(); }));
+authCarousel.addEventListener("mouseenter", () => clearInterval(carouselTimer));
+authCarousel.addEventListener("mouseleave", iniciarCarousel);
+authCarousel.addEventListener("focusin", () => clearInterval(carouselTimer));
+authCarousel.addEventListener("focusout", iniciarCarousel);
+iniciarCarousel();
 
 let tiposDFD = [];
 let ultimaSolicitacao = null;
@@ -103,6 +165,56 @@ let ultimoTR = null;
 let itensRequisicao = [];
 let gruposRequisicao = {};
 let metadadosRequisicao = {};
+let catalogoPneus = [];
+let lotesConstrucao = [];
+
+const palavrasLotesConstrucao = {
+  "materiais hidraulicos": ["tubo pvc", "joelho", "luva", "sifao", "registro", "torneira", "caixa de gordura", "hidraulic"],
+  "materiais eletricos": ["lampada", "tomada", "interruptor", "plafon", "fio", "cabo", "disjuntor", "soquete", "eletric"],
+  "materiais de pintura": ["tinta", "massa acrilica", "rolo", "garfo gaiola", "pincel", "verniz", "solvente", "selador", "base acr", "lixa"],
+  "materiais estruturais": ["parafuso", "bucha", "prego", "chumbador", "cimento", "cal", "argamassa", "tijolo", "bloco"],
+  "ferramentais": ["broca", "martelo", "alicate", "chave", "serrote", "disco de corte", "trena"],
+  "madeiras": ["madeira", "tabua", "caibro", "ripa", "compensado"],
+  "cobertura": ["telha", "cumeeira", "calha"],
+  "perfis metalicos e telas": ["perfil", "tela", "vergalhao"],
+  "esquadrias metalicas e funilaria": ["porta metalica", "janela metalica", "rufo"],
+  "acabamento interno e externo": ["piso", "revestimento", "rodape", "rejunte"],
+  "artefatos de cimento": ["meio fio", "paver", "palanque de concreto"],
+};
+
+function normalizarTextoConstrucao(valor) {
+  return String(valor || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function identificarLotesDosItens() {
+  if (requisicaoTipo.value !== "material_construcao" || !lotesConstrucao.length || !itensRequisicao.length) return;
+  const grupos = {};
+  itensRequisicao.forEach((item) => {
+    const descricao = normalizarTextoConstrucao(item.descricao);
+    const categoria = Object.entries(palavrasLotesConstrucao)
+      .find(([, palavras]) => palavras.some((palavra) => descricao.includes(palavra)))?.[0] || "";
+    item.categoria_lote = categoria;
+    if (categoria) (grupos[categoria] ||= []).push(item);
+  });
+  Object.entries(grupos).forEach(([categoria, itens]) => {
+    const total = itens.reduce((soma, item) => soma + Number(item.quantidade) * Number(item.valor_unitario), 0);
+    const candidatos = lotesConstrucao
+      .filter((lote) => normalizarTextoConstrucao(lote.descricao).includes(categoria))
+      .sort((a, b) => Number(a.numero) - Number(b.numero));
+    const escolhido = candidatos.find((lote) => Number(lote.saldo_valor) >= total) || candidatos.at(-1);
+    itens.forEach((item) => { item.lote_identificado = escolhido || null; });
+  });
+  const identificados = [...new Map(itensRequisicao.filter((item) => item.lote_identificado)
+    .map((item) => [`${item.lote_identificado.contrato}-${item.lote_identificado.numero}`, item.lote_identificado])).values()];
+  if (identificados.length) {
+    const primeiro = lotesConstrucao.indexOf(identificados[0]);
+    if (primeiro >= 0) construcaoLote.value = String(primeiro);
+  }
+  desenharItensRequisicao();
+  const naoIdentificados = itensRequisicao.filter((item) => !item.lote_identificado).length;
+  requisicaoResumo.textContent = `${itensRequisicao.length} item(ns) · ${identificados.length} lote(s) identificado(s)`
+    + (naoIdentificados ? ` · ${naoIdentificados} item(ns) precisam de conferência` : "");
+}
 let modoAcesso = "login";
 let primeiroUsuarioPendente = false;
 let usuarioAtual = null;
@@ -581,8 +693,24 @@ function preencherFormulario(formulario, dados) {
   Object.entries(dados).forEach(([nome, valor]) => {
     if (nome === "itens") return;
     const campo = formulario.elements.namedItem(nome);
-    if (campo && typeof valor !== "object") campo.value = valor ?? "";
+    const campoDeSecretaria = ["secretaria", "unidade_requisitante", "solicitante"].includes(nome);
+    if (campo && typeof valor !== "object" && !(usuarioAtual?.perfil !== "admin" && campoDeSecretaria)) {
+      campo.value = valor ?? "";
+    }
   });
+}
+
+function sincronizarSecretariaNosFormularios() {
+  const secretaria = currentSecretariat.value;
+  const nomeCompleto = secretaria ? `Secretaria Municipal de ${secretaria}` : "";
+  document.querySelectorAll('[name="secretaria"], [name="unidade_requisitante"], [name="solicitante"]')
+    .forEach((campo) => { campo.value = nomeCompleto; });
+  document.getElementById("requisicao-destino").value = secretaria
+    ? `SECRETARIA MUNICIPAL DE ${secretaria.toUpperCase()}`
+    : "";
+  document.getElementById("requisicao-fonte").value = secretaria === "Educação"
+    ? "1000/ 1104 / 3104 / 1103"
+    : "";
 }
 
 async function carregarContratacoes(selecionarId = null) {
@@ -607,11 +735,11 @@ function atualizarContratacoesDaSecretaria(selecionarId = null) {
         .map((item) => `<option value="${item.id}">${item.titulo}</option>`)
         .join("");
     if (valorAtual) currentContract.value = String(valorAtual);
-    if (currentContract.value) carregarHistorico();
+    if (currentContract.value) carregarHistorico(true);
     else documentHistory.textContent = secretaria ? "Selecione ou crie uma contratação para consultar o histórico." : "Selecione uma secretaria.";
 }
 
-async function carregarHistorico() {
+async function carregarHistorico(abrirMaisRecente = false) {
   const contratacaoId = currentContract.value;
   if (!contratacaoId) {
     documentHistory.textContent = "Selecione uma contratação para consultar o histórico.";
@@ -641,6 +769,9 @@ async function carregarHistorico() {
       botao.addEventListener("click", () => carregarDocumento(documento.id));
       documentHistory.appendChild(botao);
     });
+    if (abrirMaisRecente) {
+      await carregarDocumento(payload.documentos[0].id);
+    }
   } catch (error) {
     workspaceStatus.textContent = error.message;
     workspaceStatus.className = "status error";
@@ -761,19 +892,10 @@ createContract.addEventListener("click", async () => {
   }
 });
 
-currentContract.addEventListener("change", carregarHistorico);
+currentContract.addEventListener("change", () => carregarHistorico(true));
 currentSecretariat.addEventListener("change", () => {
   atualizarContratacoesDaSecretaria();
-  const secretaria = currentSecretariat.value;
-  document.querySelectorAll('[name="unidade_requisitante"]').forEach((campo) => {
-    campo.value = secretaria ? `Secretaria Municipal de ${secretaria}` : "";
-  });
-  document.getElementById("requisicao-destino").value = secretaria
-    ? `SECRETARIA MUNICIPAL DE ${secretaria.toUpperCase()}`
-    : "";
-  document.getElementById("requisicao-fonte").value = secretaria === "Educação"
-    ? "1000/ 1104 / 3104 / 1103"
-    : "";
+  sincronizarSecretariaNosFormularios();
 });
 saveDfd.addEventListener("click", () => {
   const dados = Object.fromEntries(new FormData(form).entries());
@@ -833,9 +955,34 @@ async function ativarAplicacao(usuario) {
   mostrarModulo(null);
   authOverlay.classList.add("hidden");
   currentUserName.textContent = usuario.nome;
+  workspaceUserName.textContent = usuario.nome;
   userChip.classList.remove("hidden");
   logoutButton.classList.remove("hidden");
   manageUsers.classList.toggle("hidden", usuario.perfil !== "admin");
+  if (usuario.perfil !== "admin") {
+    const secretaria = (usuario.secretaria || "")
+      .replace(/^Secretaria Municipal d(?:e|a|o)\s+/i, "")
+      .replace(/^Secretaria d(?:e|a|o)\s+/i, "");
+    currentSecretariat.value = secretaria;
+    currentSecretariat.disabled = true;
+    currentSecretariat.title = "Sua conta possui acesso somente a esta secretaria.";
+    currentSecretariat.classList.add("hidden");
+    secretariatSelectLabel.textContent = "Secretaria vinculada";
+    fixedSecretariatName.textContent = secretaria || "Secretaria não informada";
+    fixedSecretariat.classList.remove("hidden");
+    currentSecretariat.dispatchEvent(new Event("change"));
+    document.querySelectorAll('[name="secretaria"], [name="unidade_requisitante"], [name="solicitante"]')
+      .forEach((campo) => {
+        campo.readOnly = true;
+        campo.title = "Sua conta possui acesso somente a esta secretaria.";
+      });
+  } else {
+    currentSecretariat.disabled = false;
+    currentSecretariat.title = "";
+    currentSecretariat.classList.remove("hidden");
+    secretariatSelectLabel.textContent = "Secretaria selecionada";
+    fixedSecretariat.classList.add("hidden");
+  }
   await Promise.all([carregarTipos(), carregarTiposTR(), carregarContratacoes()]);
 }
 
@@ -1006,6 +1153,31 @@ userForm.addEventListener("submit", async (event) => {
 
 function desenharItensRequisicao() {
   requisicaoItens.innerHTML = "";
+  if (requisicaoTipo.value === "pneu") {
+    itensRequisicao.forEach((item) => {
+      const linha = document.createElement("div");
+      linha.className = "pneu-item-row";
+      linha.innerHTML = `
+        <div class="pneu-item-info"><strong>Item</strong><span class="pneu-numero"></span></div>
+        <div class="pneu-item-info"><strong class="pneu-descricao"></strong><span class="pneu-contratacao"></span></div>
+        <div class="pneu-item-info"><strong>Fornecedor</strong><span class="pneu-fornecedor"></span></div>
+        <div class="pneu-item-info"><strong>Saldo</strong><span class="pneu-saldo"></span></div>
+        <label>Quantidade <span>*</span><input class="pneu-quantidade" type="number" min="0.01" step="0.01" required /></label>`;
+      linha.querySelector(".pneu-numero").textContent = item.numero;
+      linha.querySelector(".pneu-descricao").textContent = item.descricao;
+      linha.querySelector(".pneu-contratacao").textContent = `Contratação ${item.contratacao} · ${Number(item.valor_unitario).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`;
+      linha.querySelector(".pneu-fornecedor").textContent = item.fornecedor;
+      linha.querySelector(".pneu-saldo").textContent = `${item.saldo_quantidade} unidade(s)`;
+      const quantidade = linha.querySelector(".pneu-quantidade");
+      quantidade.max = item.saldo_quantidade;
+      quantidade.value = item.quantidade || 1;
+      quantidade.addEventListener("input", () => { item.quantidade = Number(quantidade.value); });
+      item.quantidade = Number(quantidade.value);
+      requisicaoItens.appendChild(linha);
+    });
+    desenharFornecedoresPneus();
+    return;
+  }
   itensRequisicao.forEach((item, indice) => {
     const linha = document.createElement("div");
     linha.className = "requisicao-item-row";
@@ -1014,6 +1186,22 @@ function desenharItensRequisicao() {
       <label>Quantidade<input class="req-quantidade" type="number" min="0.01" step="0.01" required /></label>
       <label>Valor unitário<input class="req-valor" type="number" min="0" step="0.01" required /></label>
       <label>Desconto (%)<input class="req-desconto-item" type="number" min="0" max="100" step="0.01" /></label>`;
+    if (requisicaoTipo.value === "material_construcao") {
+      const codigo = document.createElement("label");
+      codigo.innerHTML = 'Código do produto<input class="req-codigo" />';
+      codigo.querySelector("input").value = item.codigo || "";
+      codigo.querySelector("input").addEventListener("input", (e) => itensRequisicao[indice].codigo = e.target.value);
+      linha.prepend(codigo);
+      const loteIdentificado = document.createElement("label");
+      loteIdentificado.textContent = "Lote identificado";
+      const campoLote = document.createElement("input");
+      campoLote.readOnly = true;
+      campoLote.value = item.lote_identificado
+        ? `${item.lote_identificado.numero} - ${item.lote_identificado.descricao}`
+        : "Não identificado — conferir";
+      loteIdentificado.appendChild(campoLote);
+      linha.prepend(loteIdentificado);
+    }
     linha.querySelector(".req-descricao").value = item.descricao;
     linha.querySelector(".req-quantidade").value = item.quantidade;
     linha.querySelector(".req-valor").value = item.valor_unitario;
@@ -1026,9 +1214,62 @@ function desenharItensRequisicao() {
   });
 }
 
+function desenharFornecedoresPneus() {
+  const fornecedores = [...new Set(itensRequisicao.map((item) => item.fornecedor))];
+  pneuFornecedores.innerHTML = "";
+  pneuFornecedores.classList.toggle("hidden", !fornecedores.length);
+  fornecedores.forEach((fornecedor) => {
+    const card = document.createElement("section");
+    card.className = "pneu-fornecedor-card";
+    card.dataset.fornecedor = fornecedor;
+    const titulo = document.createElement("h4");
+    titulo.textContent = fornecedor;
+    const grade = document.createElement("div");
+    grade.className = "grid two";
+    grade.innerHTML = `
+      <label>Endereço do fornecedor <span>*</span><input class="pneu-fornecedor-endereco" required /></label>
+      <label>Cidade do fornecedor <span>*</span><input class="pneu-fornecedor-cidade" required /></label>`;
+    card.append(titulo, grade);
+    pneuFornecedores.appendChild(card);
+  });
+}
+
+document.getElementById("construcao-saldo-importar").addEventListener("click", async () => {
+  if (!construcaoSaldoArquivo.files[0]) {
+    requisicaoStatus.textContent = "Selecione o PDF do controle de saldo.";
+    requisicaoStatus.className = "status error";
+    return;
+  }
+  const formulario = new FormData();
+  formulario.append("arquivo", construcaoSaldoArquivo.files[0]);
+  requisicaoStatus.textContent = "Lendo controle de saldo...";
+  try {
+    const response = await fetch("/api/requisicoes/materiais-construcao/saldos", { method: "POST", body: formulario });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "Não foi possível ler o controle de saldo.");
+    lotesConstrucao = payload.resultado.lotes;
+    construcaoLote.innerHTML = '<option value="">Selecione o lote</option>';
+    lotesConstrucao.forEach((lote, indice) => {
+      const opcao = document.createElement("option");
+      opcao.value = indice;
+      opcao.textContent = `${lote.contrato} · item ${lote.numero} · ${lote.descricao} · saldo ${Number(lote.saldo_valor).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`;
+      construcaoLote.appendChild(opcao);
+    });
+    identificarLotesDosItens();
+    requisicaoStatus.textContent = `${lotesConstrucao.length} lote(s) com saldo encontrado(s).`;
+    requisicaoStatus.className = "status success";
+  } catch (error) {
+    requisicaoStatus.textContent = error.message;
+    requisicaoStatus.className = "status error";
+  }
+});
+
 document.getElementById("requisicao-importar").addEventListener("click", async () => {
+  const tipoAntesDaImportacao = requisicaoTipo.value;
   if (!requisicaoArquivo.files[0]) {
-    requisicaoStatus.textContent = "Selecione a planilha do orçamento.";
+    requisicaoStatus.textContent = requisicaoTipo.value === "pneu"
+      ? "Selecione o PDF da relação atualizada dos itens."
+      : "Selecione a planilha do orçamento.";
     requisicaoStatus.className = "status error";
     return;
   }
@@ -1037,21 +1278,55 @@ document.getElementById("requisicao-importar").addEventListener("click", async (
   requisicaoStatus.textContent = "Lendo orçamento...";
   requisicaoStatus.className = "status";
   try {
-    const response = await fetch("/api/requisicoes/importar", { method: "POST", body: dados });
+    const pneus = requisicaoTipo.value === "pneu";
+    const impressoras = requisicaoTipo.value === "impressora";
+    if (impressoras) dados.append("secretaria", currentSecretariat.value);
+    const rota = pneus ? "/api/requisicoes/pneus/importar"
+      : impressoras ? "/api/requisicoes/impressoras/importar" : "/api/requisicoes/importar";
+    const response = await fetch(rota, { method: "POST", body: dados });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.detail || "Não foi possível ler o orçamento.");
+    if (pneus) {
+      catalogoPneus = payload.resultado.itens;
+      itensRequisicao = [];
+      requisicaoItens.innerHTML = "";
+      pneuFornecedores.innerHTML = "";
+      pneuFornecedores.classList.add("hidden");
+      requisicaoResumo.textContent = `${payload.resultado.total_itens} itens encontrados na relação. Informe os números desejados.`;
+      requisicaoStatus.textContent = "Relação importada. Agora informe os números dos itens.";
+      requisicaoStatus.className = "status success";
+      requisicaoDownload.disabled = true;
+      pneuNumeros.focus();
+      return;
+    }
+    if (impressoras) {
+      itensRequisicao = payload.resultado.grupos.map((grupo) => ({
+        descricao: grupo.categoria === "colorida" ? "Impressões coloridas" :
+          (Number(grupo.valor_unitario) >= 0.09 ? "Multifuncional Laser P&B" : "Impressora Laser P&B Monocromática"),
+        quantidade: grupo.producao, valor_unitario: grupo.valor_unitario, desconto: 0,
+      }));
+      desenharItensRequisicao();
+      const total = itensRequisicao.reduce((soma, item) => soma + item.quantidade * item.valor_unitario, 0);
+      requisicaoResumo.textContent = `${itensRequisicao.length} tarifa(s) agrupada(s) para ${currentSecretariat.value} · Total: ${total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`;
+      requisicaoDownload.disabled = false;
+      requisicaoStatus.textContent = "Demonstrativo conferido. Revise os totais antes de gerar.";
+      requisicaoStatus.className = "status success";
+      return;
+    }
     gruposRequisicao = payload.resultado.grupos || {};
     itensRequisicao = gruposRequisicao[payload.resultado.tipo]?.itens || payload.resultado.itens;
     const descontos = [...new Set(itensRequisicao.map((item) => Number(item.desconto || 0)))];
     if (descontos.length === 1) document.getElementById("requisicao-desconto").value = descontos[0];
     const metadados = payload.resultado.metadados || {};
     metadadosRequisicao = metadados;
-    document.getElementById("requisicao-tipo").value = payload.resultado.tipo || "material";
+    document.getElementById("requisicao-tipo").value = tipoAntesDaImportacao === "material_construcao"
+      ? "material_construcao" : (payload.resultado.tipo || "material");
     if (metadados.fornecedor) document.getElementById("requisicao-fornecedor").value = metadados.fornecedor;
     if (metadados.endereco) document.getElementById("requisicao-endereco").value = metadados.endereco;
     if (metadados.cidade) document.getElementById("requisicao-cidade").value = metadados.cidade;
     if (metadados.identificacao) document.getElementById("requisicao-identificacao").value = metadados.identificacao;
-    desenharItensRequisicao();
+    if (requisicaoTipo.value === "material_construcao" && lotesConstrucao.length) identificarLotesDosItens();
+    else desenharItensRequisicao();
     const total = payload.resultado.total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     if (payload.resultado.misto) {
       const materiais = gruposRequisicao.material?.itens.length || 0;
@@ -1069,7 +1344,91 @@ document.getElementById("requisicao-importar").addEventListener("click", async (
   }
 });
 
-document.getElementById("requisicao-tipo").addEventListener("change", (event) => {
+document.getElementById("pneu-localizar").addEventListener("click", () => {
+  if (!catalogoPneus.length) {
+    requisicaoStatus.textContent = "Importe primeiro a relação atualizada dos itens.";
+    requisicaoStatus.className = "status error";
+    return;
+  }
+  const numeros = [...new Set((pneuNumeros.value.match(/\d+/g) || []).map(Number))];
+  const inexistentes = numeros.filter((numero) => !catalogoPneus.some((item) => item.numero === numero));
+  const semSaldo = numeros.filter((numero) => catalogoPneus.some((item) => item.numero === numero && item.saldo_quantidade <= 0));
+  if (!numeros.length || inexistentes.length || semSaldo.length) {
+    const erros = [];
+    if (!numeros.length) erros.push("Informe ao menos um número de item.");
+    if (inexistentes.length) erros.push(`Não encontrados: ${inexistentes.join(", ")}.`);
+    if (semSaldo.length) erros.push(`Sem saldo: ${semSaldo.join(", ")}.`);
+    requisicaoStatus.textContent = erros.join(" ");
+    requisicaoStatus.className = "status error";
+    return;
+  }
+  itensRequisicao = numeros.map((numero) => ({
+    ...catalogoPneus.find((item) => item.numero === numero), quantidade: 1,
+  }));
+  desenharItensRequisicao();
+  const fornecedores = new Set(itensRequisicao.map((item) => item.fornecedor)).size;
+  requisicaoResumo.textContent = `${itensRequisicao.length} item(ns) selecionado(s) · ${fornecedores} fornecedor(es).`;
+  requisicaoDownload.disabled = false;
+  requisicaoStatus.textContent = "Itens localizados. Confira as quantidades e os dados dos fornecedores.";
+  requisicaoStatus.className = "status success";
+});
+
+function configurarTipoRequisicao() {
+  const pneus = requisicaoTipo.value === "pneu";
+  const impressoras = requisicaoTipo.value === "impressora";
+  const construcao = requisicaoTipo.value === "material_construcao";
+  pneuSelecao.classList.toggle("hidden", !pneus);
+  construcaoSaldo.classList.toggle("hidden", !construcao);
+  document.querySelectorAll(".construcao-only").forEach((elemento) => elemento.classList.toggle("hidden", !construcao));
+  document.querySelectorAll(".pneu-only").forEach((elemento) => elemento.classList.toggle("hidden", !pneus));
+  document.querySelectorAll(".impressora-only").forEach((elemento) => elemento.classList.toggle("hidden", !impressoras));
+  document.querySelectorAll(".orcamento-only").forEach((elemento) => elemento.classList.toggle("hidden", pneus || impressoras));
+  ["pneu-responsavel-nome", "pneu-responsavel-cargo"].forEach((id) => {
+    document.getElementById(id).required = pneus;
+  });
+  ["requisicao-fornecedor", "requisicao-cidade", "requisicao-endereco"].forEach((id) => {
+    document.getElementById(id).required = !pneus && !impressoras;
+  });
+  ["impressora-contrato", "impressora-responsavel-nome", "impressora-responsavel-cargo"]
+    .forEach((id) => { document.getElementById(id).required = impressoras; });
+  ["construcao-responsavel-nome", "construcao-responsavel-cargo"]
+    .forEach((id) => { document.getElementById(id).required = construcao; });
+  document.getElementById("requisicao-identificacao-campo").classList.toggle("hidden", pneus || impressoras || construcao);
+  document.getElementById("requisicao-identificacao").required = !pneus && !impressoras && !construcao;
+  requisicaoArquivo.accept = pneus || impressoras ? ".pdf,application/pdf" : ".pdf,.xlsx,application/pdf";
+  document.getElementById("requisicao-arquivo-label").textContent = pneus
+    ? "Relação atualizada dos itens (PDF)"
+    : impressoras ? "Demonstrativo de impressoras (PDF)" : "Orçamento (PDF ou .xlsx)";
+  document.getElementById("requisicao-importar").textContent = pneus ? "Ler relação de itens" : impressoras ? "Ler demonstrativo" : "Ler orçamento";
+  requisicaoDownload.textContent = pneus ? "Gerar requisições de pneus em ZIP"
+    : impressoras ? "Gerar requisição de impressoras"
+      : construcao ? "Gerar requisições por lote em ZIP" : "Gerar e baixar requisição em Excel";
+  itensRequisicao = [];
+  requisicaoItens.innerHTML = "";
+  pneuFornecedores.innerHTML = "";
+  pneuFornecedores.classList.add("hidden");
+  requisicaoDownload.disabled = true;
+  requisicaoResumo.textContent = pneus
+    ? "Importe a relação atualizada e informe os números dos itens."
+    : impressoras ? "Importe o demonstrativo PB ou colorido para agrupar a produção da secretaria." : "Importe um orçamento para visualizar os itens.";
+}
+
+requisicaoTipo.addEventListener("change", (event) => {
+  if (["pneu", "impressora", "material_construcao"].includes(event.target.value)) {
+    configurarTipoRequisicao();
+    return;
+  }
+  pneuSelecao.classList.add("hidden");
+  document.querySelectorAll(".pneu-only").forEach((elemento) => elemento.classList.add("hidden"));
+  document.querySelectorAll(".orcamento-only").forEach((elemento) => elemento.classList.remove("hidden"));
+  ["pneu-responsavel-nome", "pneu-responsavel-cargo"].forEach((id) => { document.getElementById(id).required = false; });
+  ["requisicao-fornecedor", "requisicao-cidade", "requisicao-endereco"].forEach((id) => { document.getElementById(id).required = true; });
+  document.getElementById("requisicao-identificacao-campo").classList.remove("hidden");
+  document.getElementById("requisicao-identificacao").required = true;
+  requisicaoArquivo.accept = ".pdf,.xlsx,application/pdf";
+  document.getElementById("requisicao-arquivo-label").textContent = "Orçamento (PDF ou .xlsx)";
+  document.getElementById("requisicao-importar").textContent = "Ler orçamento";
+  requisicaoDownload.textContent = "Gerar e baixar requisição em Excel";
   const grupo = gruposRequisicao[event.target.value];
   if (!grupo) {
     if (Object.keys(gruposRequisicao).length) {
@@ -1087,12 +1446,122 @@ document.getElementById("requisicao-tipo").addEventListener("change", (event) =>
   requisicaoDownload.disabled = false;
 });
 
+// O navegador pode restaurar a opção selecionada ao recarregar a página sem
+// disparar o evento change. Sincroniza a interface com o valor restaurado.
+configurarTipoRequisicao();
+
 requisicaoForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!itensRequisicao.length) return;
   requisicaoDownload.disabled = true;
   requisicaoStatus.textContent = "Gerando requisição...";
   try {
+    if (requisicaoTipo.value === "material_construcao") {
+      const naoIdentificados = itensRequisicao.filter((item) => !item.lote_identificado);
+      if (naoIdentificados.length) throw new Error(`${naoIdentificados.length} item(ns) ainda não possuem lote identificado.`);
+      const gruposMap = new Map();
+      itensRequisicao.forEach((item) => {
+        const lote = item.lote_identificado;
+        const chave = `${lote.contrato}-${lote.numero}`;
+        if (!gruposMap.has(chave)) gruposMap.set(chave, { lote, itens: [] });
+        gruposMap.get(chave).itens.push(item);
+      });
+      const gruposLotes = [...gruposMap.values()];
+      const dadosConstrucao = {
+        fornecedor: document.getElementById("requisicao-fornecedor").value,
+        endereco: document.getElementById("requisicao-endereco").value,
+        cidade: document.getElementById("requisicao-cidade").value,
+        destino: document.getElementById("requisicao-destino").value,
+        fonte_recurso: document.getElementById("requisicao-fonte").value,
+        desconto: document.getElementById("requisicao-desconto").value,
+        responsavel_nome: document.getElementById("construcao-responsavel-nome").value,
+        responsavel_cargo: document.getElementById("construcao-responsavel-cargo").value,
+        responsavel_ato: document.getElementById("construcao-responsavel-ato").value,
+        grupos_lotes: gruposLotes, secretaria: currentSecretariat.value,
+        numero_orcamento: metadadosRequisicao.numero_orcamento || "",
+      };
+      const response = await fetch("/api/requisicoes/materiais-construcao/download-zip", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tipo: "material_construcao", dados: dadosConstrucao }),
+      });
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.detail || "Não foi possível gerar a requisição.");
+      }
+      const blob = await response.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "REQUISICOES_MATERIAIS_CONSTRUCAO.zip";
+      link.click();
+      URL.revokeObjectURL(link.href);
+      requisicaoStatus.textContent = `${gruposLotes.length} requisição(ões) gerada(s) no arquivo ZIP.`;
+      requisicaoStatus.className = "status success";
+      return;
+    }
+    if (requisicaoTipo.value === "pneu") {
+      const fornecedores = {};
+      pneuFornecedores.querySelectorAll(".pneu-fornecedor-card").forEach((card) => {
+        fornecedores[card.dataset.fornecedor] = {
+          endereco: card.querySelector(".pneu-fornecedor-endereco").value,
+          cidade: card.querySelector(".pneu-fornecedor-cidade").value,
+        };
+      });
+      const dadosPneus = {
+        itens: itensRequisicao.map((item) => ({ numero: item.numero, quantidade: item.quantidade })),
+        fornecedores,
+        destino: document.getElementById("requisicao-destino").value,
+        fonte_recurso: document.getElementById("requisicao-fonte").value,
+        responsavel_nome: document.getElementById("pneu-responsavel-nome").value,
+        responsavel_cargo: document.getElementById("pneu-responsavel-cargo").value,
+        responsavel_ato: document.getElementById("pneu-responsavel-ato").value,
+        secretaria: currentSecretariat.value,
+      };
+      const formulario = new FormData();
+      formulario.append("arquivo", requisicaoArquivo.files[0]);
+      formulario.append("dados_json", JSON.stringify(dadosPneus));
+      const response = await fetch("/api/requisicoes/pneus/download", { method: "POST", body: formulario });
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.detail || "Não foi possível gerar as requisições de pneus.");
+      }
+      const blob = await response.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "requisicoes_pneus.zip";
+      link.click();
+      URL.revokeObjectURL(link.href);
+      requisicaoStatus.textContent = "Requisições separadas por fornecedor e geradas com sucesso.";
+      requisicaoStatus.className = "status success";
+      return;
+    }
+    if (requisicaoTipo.value === "impressora") {
+      const dadosImpressoras = {
+        secretaria: currentSecretariat.value,
+        destino: document.getElementById("requisicao-destino").value,
+        fonte_recurso: document.getElementById("requisicao-fonte").value,
+        contrato: document.getElementById("impressora-contrato").value,
+        responsavel_nome: document.getElementById("impressora-responsavel-nome").value,
+        responsavel_cargo: document.getElementById("impressora-responsavel-cargo").value,
+        responsavel_ato: document.getElementById("impressora-responsavel-ato").value,
+      };
+      const formulario = new FormData();
+      formulario.append("arquivo", requisicaoArquivo.files[0]);
+      formulario.append("dados_json", JSON.stringify(dadosImpressoras));
+      const response = await fetch("/api/requisicoes/impressoras/download", { method: "POST", body: formulario });
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.detail || "Não foi possível gerar a requisição de impressoras.");
+      }
+      const blob = await response.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "requisicao_impressoras.xlsx";
+      link.click();
+      URL.revokeObjectURL(link.href);
+      requisicaoStatus.textContent = "Requisição de impressoras gerada com sucesso.";
+      requisicaoStatus.className = "status success";
+      return;
+    }
     const dados = {
       fornecedor: document.getElementById("requisicao-fornecedor").value,
       endereco: document.getElementById("requisicao-endereco").value,
