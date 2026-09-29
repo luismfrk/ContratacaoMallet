@@ -30,6 +30,8 @@ const etpObrasDownload = document.getElementById("etp-obras-download");
 const showTr = document.getElementById("show-tr");
 const trModule = document.getElementById("tr-module");
 const showRequisicao = document.getElementById("show-requisicao");
+const showAiWorkspace = document.getElementById("show-ai-workspace");
+const aiWorkspaceModule = document.getElementById("ai-workspace-module");
 const requisicaoModule = document.getElementById("requisicao-module");
 const requisicaoForm = document.getElementById("requisicao-form");
 const requisicaoArquivo = document.getElementById("requisicao-arquivo");
@@ -251,10 +253,12 @@ function mostrarModulo(nome) {
   etpModule.classList.toggle("hidden", nome !== "etp");
   trModule.classList.toggle("hidden", nome !== "tr");
   requisicaoModule.classList.toggle("hidden", nome !== "requisicao");
+  aiWorkspaceModule.classList.toggle("hidden", nome !== "ai-workspace");
   showDfd.classList.toggle("active", nome === "dfd");
   showEtp.classList.toggle("active", nome === "etp");
   showTr.classList.toggle("active", nome === "tr");
   showRequisicao.classList.toggle("active", nome === "requisicao");
+  showAiWorkspace.classList.toggle("active", nome === "ai-workspace");
 }
 
 function alternarModulo(nome) {
@@ -271,6 +275,7 @@ showDfd.addEventListener("click", () => alternarModulo("dfd"));
 showEtp.addEventListener("click", () => alternarModulo("etp"));
 showTr.addEventListener("click", () => alternarModulo("tr"));
 showRequisicao.addEventListener("click", () => alternarModulo("requisicao"));
+showAiWorkspace.addEventListener("click", () => alternarModulo("ai-workspace"));
 
 function mostrarTipoETP(tipo) {
   const compras = tipo === "compras";
@@ -984,6 +989,7 @@ async function ativarAplicacao(usuario) {
     fixedSecretariat.classList.add("hidden");
   }
   await Promise.all([carregarTipos(), carregarTiposTR(), carregarContratacoes()]);
+  await initializeAiAssistance();
 }
 
 async function verificarAutenticacao() {
@@ -1636,3 +1642,148 @@ document.getElementById("relatorio-download").addEventListener("click", async ()
 });
 
 verificarAutenticacao();
+
+const aiSensitiveFields = new Set([
+  "fornecedor_nome", "fornecedor_documento", "responsavel_nome", "autoridade_nome",
+  "fiscal_nome", "fiscal_portaria", "dotacoes"
+]);
+
+function aiDocumentType(formElement) {
+  if (formElement.id === "dfd-form") return "DFD";
+  if (formElement.id === "etp-form") return "ETP";
+  if (formElement.id === "etp-obras-form") return "ETP de obras";
+  if (formElement.id === "tr-form") return "Termo de Referência";
+  return "Documento";
+}
+
+function aiContext(formElement, activeField) {
+  const context = {};
+  for (const element of formElement.elements) {
+    if (!element.name || element === activeField || aiSensitiveFields.has(element.name)) continue;
+    if (!["INPUT", "TEXTAREA", "SELECT"].includes(element.tagName)) continue;
+    const value = String(element.value || "").trim();
+    if (value && value.length <= 2000) context[element.name] = value;
+  }
+  return context;
+}
+
+function showAiSuggestion(field, suggestion) {
+  field.closest("label")?.querySelector(".ai-suggestion")?.remove();
+  const panel = document.createElement("div");
+  panel.className = "ai-suggestion";
+  const heading = document.createElement("strong");
+  heading.textContent = "Sugestão da IA — revise antes de usar";
+  const preview = document.createElement("div");
+  preview.className = "ai-suggestion-text";
+  preview.textContent = suggestion;
+  const actions = document.createElement("div");
+  actions.className = "ai-suggestion-actions";
+  const accept = document.createElement("button");
+  accept.type = "button";
+  accept.textContent = "Usar sugestão";
+  const discard = document.createElement("button");
+  discard.type = "button";
+  discard.className = "secondary-button";
+  discard.textContent = "Descartar";
+  accept.addEventListener("click", () => {
+    field.value = suggestion;
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+    panel.remove();
+    field.focus();
+  });
+  discard.addEventListener("click", () => panel.remove());
+  actions.append(accept, discard);
+  panel.append(heading, preview, actions);
+  field.closest("label")?.append(panel);
+}
+
+const aiWorkspaceForm = document.getElementById("ai-workspace-form");
+const aiWorkspaceStatus = document.getElementById("ai-workspace-status");
+const aiWorkspaceSubmit = document.getElementById("ai-workspace-submit");
+const aiWorkspaceResultSection = document.getElementById("ai-workspace-result-section");
+const aiWorkspaceResult = document.getElementById("ai-workspace-result");
+
+aiWorkspaceForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  aiWorkspaceSubmit.disabled = true;
+  aiWorkspaceStatus.textContent = "Lendo o exemplo e preparando a sugestão...";
+  aiWorkspaceStatus.className = "status";
+  try {
+    const response = await fetch("/api/ai/transform-example", {
+      method: "POST",
+      body: new FormData(aiWorkspaceForm),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "Não foi possível adaptar o documento.");
+    aiWorkspaceResult.value = payload.result;
+    aiWorkspaceResultSection.classList.remove("hidden");
+    aiWorkspaceStatus.textContent = "Sugestão gerada. Revise todos os dados antes de utilizar.";
+    aiWorkspaceStatus.className = "status success";
+  } catch (error) {
+    aiWorkspaceStatus.textContent = error.message;
+    aiWorkspaceStatus.className = "status error";
+  } finally {
+    aiWorkspaceSubmit.disabled = false;
+  }
+});
+
+document.getElementById("ai-copy-result").addEventListener("click", async () => {
+  await navigator.clipboard.writeText(aiWorkspaceResult.value);
+  aiWorkspaceStatus.textContent = "Texto copiado.";
+  aiWorkspaceStatus.className = "status success";
+});
+
+document.getElementById("ai-download-result").addEventListener("click", () => {
+  const blob = new Blob([aiWorkspaceResult.value], { type: "text/plain;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "texto-adaptado-ia.txt";
+  link.click();
+  URL.revokeObjectURL(link.href);
+});
+
+async function requestAiSuggestion(button, field, formElement) {
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Gerando sugestão...";
+  try {
+    const label = field.closest("label")?.childNodes[0]?.textContent?.trim() || field.name;
+    const response = await fetch("/api/ai/suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        document_type: aiDocumentType(formElement),
+        field: label,
+        current_text: field.value,
+        context: aiContext(formElement, field),
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "Não foi possível gerar a sugestão.");
+    showAiSuggestion(field, payload.suggestion);
+  } catch (error) {
+    window.alert(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
+async function initializeAiAssistance() {
+  try {
+    const response = await fetch("/api/ai/status");
+    if (!response.ok || !(await response.json()).enabled) return;
+    document.querySelectorAll("#dfd-form textarea, #etp-form textarea, #etp-obras-form textarea, #tr-form textarea")
+      .forEach((field) => {
+        if (!field.name || aiSensitiveFields.has(field.name)) return;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "ai-button";
+        button.textContent = "Sugerir com IA";
+        button.addEventListener("click", () => requestAiSuggestion(button, field, field.form));
+        field.insertAdjacentElement("afterend", button);
+      });
+  } catch (_) {
+    // O restante do sistema continua disponível se o provedor estiver indisponível.
+  }
+}

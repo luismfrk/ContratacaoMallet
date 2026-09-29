@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import gerar_dfd, listar_tipos_dfd
 from docx_exporter import gerar_dfd_docx
@@ -34,6 +34,8 @@ from auth import (
     usuario_pode_acessar_secretaria,
     perfil_autocadastro,
 )
+from ai import AIConfigurationError, AIProviderError, AIService
+from ai.documents import MAX_FILE_BYTES, extract_example_text
 
 BASE_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BASE_DIR / "frontend"
@@ -99,6 +101,13 @@ class UsuarioUpdateRequest(BaseModel):
 class RequisicaoRequest(BaseModel):
     tipo: str
     dados: dict[str, Any]
+
+
+class AISuggestionRequest(BaseModel):
+    document_type: str = Field(min_length=1, max_length=40)
+    field: str = Field(min_length=1, max_length=80)
+    current_text: str = Field(default="", max_length=6000)
+    context: dict[str, Any] = Field(default_factory=dict)
 
 
 @app.middleware("http")
@@ -177,6 +186,63 @@ def exigir_acesso_dados_documento(usuario: dict[str, Any], dados: dict[str, Any]
                        for campo in ("secretaria", "unidade_requisitante", "solicitante")
                        if dados.get(campo)), "")
     exigir_acesso_secretaria(usuario, secretaria)
+
+
+@app.get("/api/ai/status")
+def ai_status() -> dict[str, Any]:
+    service = AIService()
+    return {"enabled": service.enabled, "provider": service.provider if service.enabled else None}
+
+
+@app.post("/api/ai/suggest")
+def ai_suggest(request: Request, data: AISuggestionRequest) -> dict[str, str]:
+    if len(data.context) > 40:
+        raise HTTPException(status_code=400, detail="O contexto enviado é muito extenso.")
+    service = AIService()
+    try:
+        suggestion = service.suggest(
+            data.document_type, data.field, data.current_text, data.context
+        )
+    except AIConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except AIProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    repositorio.registrar_auditoria(
+        request.state.usuario["id"],
+        "sugerir",
+        "assistencia_ia",
+        detalhes={"documento": data.document_type, "campo": data.field, "modelo": service.model},
+    )
+    return {"suggestion": suggestion, "model": service.model}
+
+
+@app.post("/api/ai/transform-example")
+async def ai_transform_example(
+    request: Request,
+    instruction: str = Form(...),
+    file: UploadFile = File(...),
+) -> dict[str, str]:
+    instruction = instruction.strip()
+    if not instruction or len(instruction) > 3000:
+        raise HTTPException(status_code=400, detail="Descreva a alteração em até 3.000 caracteres.")
+    content = await file.read(MAX_FILE_BYTES + 1)
+    try:
+        example_text = extract_example_text(file.filename or "", content)
+        service = AIService()
+        result = service.transform_example(example_text, instruction)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except AIConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except AIProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    repositorio.registrar_auditoria(
+        request.state.usuario["id"],
+        "transformar_exemplo",
+        "assistencia_ia",
+        detalhes={"arquivo": file.filename, "modelo": service.model},
+    )
+    return {"result": result, "model": service.model}
 
 
 @app.get("/", response_class=HTMLResponse)

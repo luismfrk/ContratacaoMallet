@@ -8,3 +8,6 @@ venv/
 *.log
 data/*.db
 data/*.db-*
+.agents/
+.playwright-cli/
+brag-output*/

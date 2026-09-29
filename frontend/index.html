@@ -228,6 +228,10 @@
           <b><span class="ion-icon icon-document" aria-hidden="true"></span></b>
           <span><strong>Requisição</strong><small>Gerar a partir do orçamento</small></span>
         </button>
+        <button id="show-ai-workspace" class="step" type="button">
+          <b><span class="ion-icon icon-bulb" aria-hidden="true"></span></b>
+          <span><strong>Assistente IA</strong><small>Adaptar um documento exemplo</small></span>
+        </button>
         <div class="nav-help">
           <strong><span class="ion-icon icon-bulb" aria-hidden="true"></span> Como começar</strong>
           <p>Selecione uma secretaria e um processo antes de preencher os documentos.</p>
@@ -724,6 +728,43 @@
           </button>
         </section>
       </section>
+      <section id="ai-workspace-module" class="card hidden">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Assistência de redação</p>
+            <h2>Adaptar um documento com IA</h2>
+          </div>
+          <span class="badge">Revisão obrigatória</span>
+        </div>
+        <form id="ai-workspace-form">
+          <fieldset>
+            <legend>Documento de exemplo</legend>
+            <label>Arquivo PDF, DOCX ou TXT <span>*</span>
+              <input id="ai-example-file" name="file" type="file" accept=".pdf,.docx,.txt" required />
+              <small>Limite de 5 MB. Envie apenas documentos que possam ser processados pelo serviço de IA.</small>
+            </label>
+            <label>O que você precisa modificar? <span>*</span>
+              <textarea id="ai-example-instruction" name="instruction" rows="6" maxlength="3000" required placeholder="Ex.: adapte o objeto para aquisição de materiais escolares, preserve a estrutura e marque os valores que preciso informar."></textarea>
+            </label>
+          </fieldset>
+          <div id="ai-workspace-status" class="status" role="status" aria-live="polite"></div>
+          <div class="form-actions">
+            <button id="ai-workspace-submit" type="submit">Gerar versão adaptada</button>
+          </div>
+        </form>
+        <section id="ai-workspace-result-section" class="preview hidden">
+          <div class="section-heading">
+            <h2>Texto sugerido</h2>
+            <span class="badge">Confira antes de utilizar</span>
+          </div>
+          <textarea id="ai-workspace-result" rows="20" aria-label="Texto sugerido pela IA"></textarea>
+          <div class="ai-result-actions">
+            <button id="ai-copy-result" type="button">Copiar texto</button>
+            <button id="ai-download-result" class="secondary-button" type="button">Baixar TXT</button>
+          </div>
+        </section>
+      </section>
+
       <section id="requisicao-module" class="card hidden">
         <div class="section-heading">
           <div>
@@ -816,6 +857,6 @@
       </section>
     </main>
     <footer class="developer-credit">Developed by @luis.mfrk</footer>
-    <script src="/static/app-pneus-v2-20260818.js?v=9"></script>
+    <script src="/static/app.js?v=10"></script>
   </body>
 </html>

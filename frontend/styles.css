@@ -804,6 +804,31 @@ pre {
   .form-actions { flex-direction: column; }
 }
 
+.ai-button {
+  width: auto;
+  margin-top: 8px;
+  padding: 7px 12px;
+  color: var(--green-800);
+  background: var(--green-50);
+  border: 1px solid #b8dbea;
+  font-size: .84rem;
+}
+.ai-button:hover { background: var(--green-100); }
+.ai-suggestion {
+  margin-top: 10px;
+  padding: 14px;
+  color: var(--ink);
+  background: #f4f9fc;
+  border: 1px solid #bfdce9;
+  border-radius: 9px;
+}
+.ai-suggestion-text { margin: 9px 0 12px; white-space: pre-wrap; line-height: 1.55; }
+.ai-suggestion-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.ai-suggestion-actions button { width: auto; padding: 8px 12px; }
+.ai-result-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.ai-result-actions button { width: auto; }
+#ai-workspace-result { min-height: 360px; line-height: 1.55; }
+
 /* Modo celular manual: permite usar a interface otimizada independentemente da tela. */
 html[data-layout-mode="mobile"] .shell { width: min(520px, calc(100% - 24px)); }
 html[data-layout-mode="mobile"] .topbar { position: relative; padding: 11px 0; }
