@@ -216,9 +216,9 @@ class Repositorio:
 
         if self.postgresql:
 
-          self._inicializar_postgresql()
+            self._inicializar_postgresql()
 
-        return
+            return
 
 
 
