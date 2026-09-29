@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 import json
 from urllib.parse import quote
 from datetime import datetime
